@@ -4,10 +4,11 @@
 \providecommand\HyField@AuxAddToCoFields[2]{}
 \@writefile{toc}{\contentsline {paragraph}{\textbf  {Keywords}}{1}{section*.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2}Mathematical Methodology \& Friction Model}{1}{section.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Feature Vector \& Platt Calibration}{1}{subsection.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Market Maker Strategy \& Friction Model Breakdown (18\%)}{1}{subsection.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3}Real Empirical Results from SQLite Database}{1}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Correction Methodology \& $t_{\text  {left}}$ Breakdown}{1}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Candle-Level Prediction ($N=407$)}{1}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Market Maker Friction Model (18\%)}{1}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Audited Empirical Results}{1}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion \& Sample Audit}{1}{section.4}\protected@file@percent }
 \bibcite{avellaneda2008}{1}
 \bibcite{chen2016}{2}
 \bibcite{platt1999}{3}
@@ -16,10 +17,9 @@
 \newlabel{tab:metrics}{{1}{2}{Empirical Directional Audit with Bonferroni Correction for Multiple Hypothesis Testing ($k=10$, $\alpha =0.005$)}{table.1}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Autonomous Market Maker Statistical Performance with Bootstrap Confidence Intervals}}{2}{table.2}\protected@file@percent }
 \newlabel{tab:maker}{{2}{2}{Autonomous Market Maker Statistical Performance with Bootstrap Confidence Intervals}{table.2}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Directional Threshold Sweep comparing standard 95\% Wilson CIs with 99.5\% Bonferroni CIs against the break-even cutoff.}}{2}{figure.1}\protected@file@percent }
-\newlabel{fig:equity}{{1}{2}{Directional Threshold Sweep comparing standard 95\% Wilson CIs with 99.5\% Bonferroni CIs against the break-even cutoff}{figure.1}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces (A) Real Empirical ROC Curve (AUC = 0.8572) and (B) Real Probabilistic Calibration Diagram over 179,065 ticks.}}{2}{figure.2}\protected@file@percent }
-\newlabel{fig:calibration}{{2}{2}{(A) Real Empirical ROC Curve (AUC = 0.8572) and (B) Real Probabilistic Calibration Diagram over 179,065 ticks}{figure.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion \& Risk Recommendations}{2}{section.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Directional Threshold Sweep comparing standard 95\% CIs with 99.5\% Bonferroni CIs against the break-even cutoff.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:equity}{{1}{2}{Directional Threshold Sweep comparing standard 95\% CIs with 99.5\% Bonferroni CIs against the break-even cutoff}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces (A) Candle-Level ROC Curve ($N=407$ independent, AUC = 0.6921) and (B) AUC Decay across $t_{\text  {left}}$ time windows.}}{2}{figure.2}\protected@file@percent }
+\newlabel{fig:calibration}{{2}{2}{(A) Candle-Level ROC Curve ($N=407$ independent, AUC = 0.6921) and (B) AUC Decay across $t_{\text {left}}$ time windows}{figure.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {5}Conclusion}{2}{section.5}\protected@file@percent }
 \gdef \@abspage@last{2}

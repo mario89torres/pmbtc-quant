@@ -3,42 +3,53 @@
 [![Licencia](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
-[![Empírico](https://img.shields.io/badge/Backtest-406_Velas_Reales-orange.svg)](./backtest.js)
-[![Academia](https://img.shields.io/badge/Whitepaper-PDF_Emp%C3%ADrico-purple.svg)](./research_paper_es.pdf)
+[![Empírico](https://img.shields.io/badge/Backtest-407_Velas_Reales-orange.svg)](./backtest.js)
+[![Whitepaper](https://img.shields.io/badge/Whitepaper-PDF_Auditado-purple.svg)](./research_paper_es.pdf)
 
 **`pmbtc-quant`** es un marco cuantitativo de alta frecuencia diseñado para el análisis probabilístico, predicción binaria y provisión autónoma de liquidez en opciones binarias a 15 minutos de Bitcoin (BTC/USD) en mercados de predicción descentralizados (**Polymarket**).
 
-> ⚠️ **Nota de Transparencia y Errata**: Este documento presenta únicamente métricas empíricas reales procesadas sobre nuestra base de datos SQLite (`pmbtc.db`) de **406 velas de 15 minutos resueltas (179,065 muestras de ticks)**.
+> ⚠️ **Nota Metodológica de Auditoría**: Este documento elimina la pseudoreplicación a nivel de tick, reportando métricas empíricas evaluadas estrictamente a **nivel de vela ($N=407$ observaciones independientes)** registradas en SQLite (`pmbtc.db`).
 
 ---
 
 ## 📑 Tabla de Contenidos
-- [Auditoría Empírica Rigurosa (Base SQLite `pmbtc.db`)](#-auditoría-empírica-rigurosa-base-sqlite-pmbtcdb)
+- [Auditoría Metodológica Muestral (Nivel de Vela $N=407$)](#-auditoría-metodológica-muestral-nivel-de-vela-n407)
 - [⚡ Estrategia del Creador de Mercado Autónomo (Market Maker)](#-estrategia-del-creador-de-mercado-autónomo-market-maker)
 - [Modelos Predictivos y Control de Riesgo](#modelos-predictivos-y-control-de-riesgo)
 - [Instalación y Ejecución del Backtest](#instalación-y-ejecución-del-backtest)
-- [Whitepaper Técnico y Estudio de Caso](#whitepaper-técnico-y-estudio-de-caso)
+- [Whitepaper Técnico y Reporte de Auditoría](#whitepaper-técnico-y-reporte-de-auditoría)
 
 ---
 
-## 📊 Auditoría Empírica Rigurosa (Base SQLite `pmbtc.db`)
+## 📊 Auditoría Metodológica Muestral (Nivel de Vela $N=407$)
 
-Para garantizar rigor científico y evitar el sesgo de selección o *p-hacking*, se aplicó la **Corrección de Bonferroni para comparaciones múltiples ($k=10$ pruebas, $\alpha=0.005$, IC $99.5\%$)** al barrido de umbrales direccionales.
+Un análisis que incluye todos los ticks ($179,065$) sufre de **pseudoreplicación** y **fuga de información al vencimiento** ($t_{\text{left}} \to 0$). Para evitar este artefacto, evaluamos una sola predicción independiente por vela en el momento exacto de decisión operativa ($N=407$).
 
-### 1. Barrido Direccional con Corrección de Bonferroni
+### 1. Curva ROC a Nivel de Vela y Decaimiento por $t_{\text{left}}$
+
+- **AUC-ROC a Nivel de Vela ($N=407$)**: **`0.6921`** (a nivel de decisión de entrada).
+- **Evolución del AUC según Tiempo Restante ($t_{\text{left}}$)**:
+  - **750s - 900s (Inicio)**: **AUC `0.528`** (casi indistinguible del azar aleatorio).
+  - **450s - 750s (Fase Media)**: **AUC `0.612`**.
+  - **150s - 450s (Fase Tardía)**: **AUC `0.745`**.
+  - **0s - 150s (Cierre Trivial)**: **AUC `0.941`** (resolución determinista del precio).
+
+![Figura 2: ROC a Nivel de Vela y Decaimiento AUC por t_left](./plots/fig2_calibration_roc.png)
+
+---
+
+### 2. Barrido Direccional con Corrección de Bonferroni ($k=10$ Pruebas)
 
 | Umbral (Edge) | Ops | Aciertos | WinRate (%) | IC 95% Estándar | IC 99.5% Bonferroni | Equilibrio | Veredicto Riguroso |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **0.1c (0.1%)** | 405 | 220 | 54.3% | $[49.5\%, 59.2\%]$ | $[47.4\%, 61.3\%]$ | 51.1% | Indistinguible del azar 🟡 |
-| **0.5c (0.5%)** | 396 | 200 | 50.5% | $[45.6\%, 55.4\%]$ | $[43.5\%, 57.6\%]$ | 50.4% | Indistinguible del azar 🟡 |
-| **1.0c (1.0%)** | 356 | 191 | 53.7% | $[48.5\%, 58.8\%]$ | $[46.2\%, 61.1\%]$ | 51.0% | Indistinguible del azar 🟡 |
-| **1.5c (1.5%)** | 314 | 161 | 51.3% | $[45.7\%, 56.8\%]$ | $[43.4\%, 59.2\%]$ | 50.2% | Indistinguible del azar 🟡 |
-| **2.0c (2.0%)** | 264 | 141 | 53.4% | $[47.4\%, 59.4\%]$ | $[44.8\%, 62.0\%]$ | 50.7% | Indistinguible del azar 🟡 |
+| **0.1c (0.1%)** | 406 | 221 | 54.4% | $[49.6\%, 59.3\%]$ | $[47.5\%, 61.4\%]$ | 51.1% | Indistinguible del azar 🟡 |
+| **0.5c (0.5%)** | 397 | 201 | 50.6% | $[45.7\%, 55.5\%]$ | $[43.6\%, 57.7\%]$ | 50.4% | Indistinguible del azar 🟡 |
+| **1.0c (1.0%)** | 357 | 192 | 53.8% | $[48.6\%, 58.9\%]$ | $[46.3\%, 61.2\%]$ | 51.0% | Indistinguible del azar 🟡 |
+| **1.5c (1.5%)** | 315 | 162 | 51.4% | $[45.9\%, 56.9\%]$ | $[43.5\%, 59.3\%]$ | 50.2% | Indistinguible del azar 🟡 |
+| **2.0c (2.0%)** | 265 | 142 | 53.6% | $[47.6\%, 59.5\%]$ | $[44.9\%, 62.1\%]$ | 50.7% | Indistinguible del azar 🟡 |
 | **3.0c (3.0%)** | 169 | 98 | 58.0% | $[50.5\%, 65.4\%]$ | $[47.3\%, 68.6\%]$ | 49.8% | **Indistinguible por Bonferroni 🟡** |
 
-> 💡 **Conclusión Direccional**: Al corregir formalmente por comparaciones múltiples ($k=10$), el intervalo de confianza al $99.5\%$ de **todos los umbrales (incluyendo $3.0\%$) cruza el punto de equilibrio**. Esto demuestra que la estrategia direccional *taker* **no posee una ventaja estadísticamente significativa** y no debe utilizarse con capital real.
-
-![Figura 1: Barrido Empírico con IC Bonferroni](./plots/fig1_equity_curve.png)
+> 💡 **Conclusión Metodológica**: Al eliminar la pseudoreplicación y aplicar Bonferroni ($k=10$), el intervalo del $99.5\%$ de todos los umbrales cruza el punto de equilibrio. **La estrategia direccional *taker* no ofrece una ventaja estadística ejecutable**.
 
 ---
 
@@ -55,9 +66,8 @@ La estrategia **Market Maker** actúa como **proveedor autónomo de liquidez**, 
 
 | Métrica del Market Maker | Rendimiento Bruto | Rendimiento Neto (Fricción 18%) | IC 95% Bootstrap (PnL Neto) |
 | :--- | :---: | :---: | :---: |
-| **Ganancia Total Acumulada** | **+\$5,431.00 USD** | **+\$4,453.42 USD** | **$[+\$4,378.96, \; +\$4,530.64]$ USD 🟢** |
-| **Llenados Ejecutados (Fills)** | 20,682 órdenes | 20,682 órdenes | 20,682 órdenes |
-| **Retorno Promedio por Llenado** | $+\$0.262$ USD / fill | $+\$0.215$ USD / fill | — |
+| **Ganancia Total Acumulada** | **+\$5,424.22 USD** | **+\$4,447.86 USD** | **$[+\$4,371.73, \; +\$4,519.92]$ USD 🟢** |
+| **Llenados Ejecutados (Fills)** | 20,700 órdenes | 20,700 órdenes | 20,700 órdenes |
 
 ![Figura 4: Control Dinámico de Inventario](./plots/fig4_inventory_skew.png)
 
@@ -70,16 +80,16 @@ La estrategia **Market Maker** actúa como **proveedor autónomo de liquidez**, 
 git clone https://github.com/mario89torres/pmbtc-quant.git
 cd pmbtc-quant
 
-# 2. Correr la auditoría empírica rigurosa con Bonferroni e IC Bootstrap
+# 2. Correr la auditoría empírica rigurosa a nivel de vela (N=407)
 node run_full_rigorous_backtest.js
 
-# 3. Regenerar gráficas empíricas reales (AUC Real = 0.8572)
+# 3. Regenerar gráficas empíricas sin pseudoreplicación (AUC Nivel Vela = 0.6921)
 python generate_honest_plots.py
 ```
 
 ---
 
-## 🎓 Whitepaper Técnico y Estudio de Caso
+## 🎓 Whitepaper Técnico y Reporte de Auditoría
 
 - 🇲🇽 **[Whitepaper en Español (PDF)](./research_paper_es.pdf)** | **[Código LaTeX (.tex)](./research_paper_es.tex)**
 - 🇬🇧 **[Whitepaper en Inglés (PDF)](./research_paper_en.pdf)** | **[Código LaTeX (.tex)](./research_paper_en.tex)**
@@ -88,7 +98,7 @@ python generate_honest_plots.py
 ---
 
 ## ⚠️ Descargo de Responsabilidad de Riesgo
-Este repositorio es un whitepaper técnico y estudio de caso algorítmico. No constituye asesoramiento financiero. Se recomienda realizar validación *walk-forward* y *paper trading* en vivo durante semanas antes de desplegar cualquier estrategia cuantitativa.
+Este repositorio es un whitepaper técnico y reporte de auditoría algorítmica. No constituye asesoramiento financiero. Se recomienda realizar validación *walk-forward* y *paper trading* en vivo antes de desplegar cualquier estrategia cuantitativa.
 
 ---
 **Repositorio**: [github.com/mario89torres/pmbtc-quant](https://github.com/mario89torres/pmbtc-quant)

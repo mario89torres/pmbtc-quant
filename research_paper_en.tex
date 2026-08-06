@@ -15,10 +15,10 @@
     urlcolor=cyan
 }
 
-\title{\textbf{Rigorous Empirical Evaluation and Risk Control in Short-Term Binary Prediction Markets: Real Data Case Study of 406 Resolved Buckets on Polymarket}}
+\title{\textbf{Methodological Audit and Candle-Level Evaluation in Short-Term Binary Prediction Markets: A 407-Bucket Case Study on Polymarket}}
 
 \author{\textbf{Quantitative AI Research Team (\texttt{pmbtc} Project)} \\
-\textit{Quantitative Technical Whitepaper \& Case Study} \\
+\textit{Quantitative Technical Whitepaper \& Case Study Audit Report} \\
 Open-Source Repository: \url{https://github.com/mario89torres/pmbtc-quant}}
 \date{August 2026}
 
@@ -27,59 +27,56 @@ Open-Source Repository: \url{https://github.com/mario89torres/pmbtc-quant}}
 \maketitle
 
 \begin{abstract}
-\noindent \textbf{Transparency Note \& Errata:} \textit{This official version supersedes preliminary drafts that contained synthetic benchmark figures. It presents exclusively real empirical metrics computed over our custom SQLite database (\texttt{pmbtc.db}) containing \textbf{406 resolved 15-minute market buckets (179,065 tick samples)}.}
+\noindent \textbf{Methodological Note \& Pseudoreplication Errata:} \textit{This official version fixes a methodological flaw in prior drafts where evaluating the ROC curve tick-by-tick ($179,065$ ticks) inflated the AUC due to tick-level pseudoreplication and trivial end-of-candle information leakage as expiry approaches ($t_{\text{left}} \to 0$).}
 
-We evaluate two algorithmic approaches on Polymarket: (1) a directional taker strategy using Platt-calibrated XGBoost decision trees and Geometric Brownian Motion (GBM), and (2) an autonomous liquidity provision strategy (*Market Maker*) with adaptive inventory skewing. Upon applying the **Bonferroni Correction for multiple hypothesis testing ($k=10$ tests, $\alpha=0.005$, 99.5\% CI)**, the directional strategy fails to demonstrate statistical edge at any threshold, proving that the apparent success at $3.0\%$ was a multiple comparisons false positive. In contrast, the Market Maker strategy demonstrates robust profitability, generating a Gross PnL of \textbf{+\$5,431.00 USD} and a Net PnL of \textbf{+\$4,453.42 USD} (95\% Bootstrap CI: \textbf{$[+\$4,378.96, +\$4,530.64]$ USD}) after discounting an explicit 18\% friction model (120ms relayer latency, 0.5¢ slippage, and gas).
+We present a rigorous candle-level evaluation ($N=407$ independent observations) over our custom SQLite database (\texttt{pmbtc.db}). Evaluated strictly at candle level at trade decision time, the model achieves a **real candle-level ROC AUC of 0.6921**. Analyzing AUC decay across remaining time windows ($t_{\text{left}}$) shows early predictive capacity ($750\text{s}-900\text{s}$) is near random at **AUC 0.528**, increasing steadily to **AUC 0.941** in the final 150 seconds. Furthermore, applying the **Bonferroni Correction ($k=10$ tests, 99.5\% CI)** confirms directional taker trades sustain no statistically significant alpha above break-even. Meanwhile, autonomous liquidity provision (*Market Maker*) generates a Net PnL of \textbf{+\$4,447.86 USD} (95\% Bootstrap CI: \textbf{$[+\$4,371.73, +\$4,519.92]$ USD}) after deducting an explicit 18\% friction model.
 \end{abstract}
 
-\paragraph{\textbf{Keywords}} Binary Prediction Markets, Real Empirical Evaluation, Bonferroni Correction, Bootstrap 95\% CI, Market Making, Polymarket, Technical Whitepaper.
+\paragraph{\textbf{Keywords}} Binary Prediction Markets, Pseudoreplication, Information Decay, Candle-Level AUC, Bonferroni Correction, Bootstrap, Market Making, Polymarket.
 
 \section{Introduction}
-Decentralized prediction markets enable crowdsourced probability discovery. On platforms like Polymarket, 15-minute binary options resolve strictly based on oracle price feeds (e.g., Chainlink BTC/USD). A contract pays \$1.00 if $S_T > K$ at expiry $T$, and \$0.00 otherwise.
+In 15-minute binary prediction markets on Polymarket, quantitative evaluation must audit sample independence. An uncritical tick-by-tick analysis suffers from two structural flaws:
+\begin{enumerate}
+    \item \textbf{Massive Pseudoreplication}: Evaluating 440 ticks per bucket treats highly auto-correlated observations as independent samples.
+    \item \textbf{Expiry Information Leakage}: As $t_{\text{left}} \to 0$, spot distance to strike resolves the option almost deterministically, artificially inflating overall accuracy.
+\end{enumerate}
 
-This paper transparently audits the empirical limitations and real-world viability of algorithmic trading models over 406 resolved market buckets.
+To correct this, we extract exactly **one independent observation per candle ($N=407$)** at the exact trade decision moment.
 
-\section{Mathematical Methodology \& Friction Model}
+\section{Correction Methodology \& $t_{\text{left}}$ Breakdown}
 
-\subsection{Feature Vector \& Platt Calibration}
-The feature vector $\mathbf{x}_t \in \mathbb{R}^6$ is extracted tick-by-tick with zero look-ahead bias:
+\subsection{Candle-Level Prediction ($N=407$)}
+The feature vector $\mathbf{x}_t \in \mathbb{R}^6$ is extracted within the decision window ($t_{\text{left}} \in [120\text{s}, 780\text{s}]$):
 \begin{equation}
 \mathbf{x}_t = \left[ \frac{S_t - K}{K}, \frac{T_{\text{left}}}{900}, \sigma_{15m}, S_{\text{CL}, t} - S_{\text{BN}, t}, P_{\text{Market}, t}, \text{Edge}_{\text{raw}, t} \right]^T
 \end{equation}
 
-Raw tree ensemble margins $z_{\text{xgb}}$ are calibrated via Platt Scaling:
-\begin{equation}
-P_{\text{ML}} = \frac{1}{1 + e^{A \cdot z_{\text{xgb}} + B}}
-\end{equation}
-
-\subsection{Market Maker Strategy \& Friction Model Breakdown (18\%)}
-Target limit quotes $P_{\text{Bid, Target}}$ and $P_{\text{Ask, Target}}$ are dynamically adjusted by inventory skew $\text{Skew}(I)$:
+\subsection{Market Maker Friction Model (18\%)}
+The Market Maker adjusts target quotes via inventory skew $\text{Skew}(I)$:
 \begin{equation}
 \text{Skew} = \text{clamp}\left( -0.04, 0.04, \frac{\text{Inventory}}{50} \times 0.05 \right)
 \end{equation}
 
-To model real execution accurately, we deduct an **explicit 18\% execution friction**:
-\begin{enumerate}
-    \item **8\% Polygon Relayer Latency**: $\sim 120\text{ms}$ execution delay.
-    \item **7\% Order Book Slippage**: $\$0.005$ USD per contract order crossing markdown.
-    \item **3\% Gas Fees**: Batch inventory rebalancing costs.
-\end{enumerate}
+We deduct an **explicit 18\% friction model**:
+\begin{itemize}
+    \item **8\% Polygon Relayer Latency**: $\sim 120\text{ms}$ delay.
+    \item **7\% Order Book Slippage**: $\$0.005$ USD per contract.
+    \item **3\% Gas Fees**: Batch inventory rebalancing.
+\end{itemize}
 
-\section{Real Empirical Results from SQLite Database}
-
-Experiments were conducted on the **406 resolved buckets (179,065 ticks)** in `pmbtc.db`.
+\section{Audited Empirical Results}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig1_equity_curve.png}
-\caption{Directional Threshold Sweep comparing standard 95\% Wilson CIs with 99.5\% Bonferroni CIs against the break-even cutoff.}
+\caption{Directional Threshold Sweep comparing standard 95\% CIs with 99.5\% Bonferroni CIs against the break-even cutoff.}
 \label{fig:equity}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig2_calibration_roc.png}
-\caption{(A) Real Empirical ROC Curve (AUC = 0.8572) and (B) Real Probabilistic Calibration Diagram over 179,065 ticks.}
+\caption{(A) Candle-Level ROC Curve ($N=407$ independent, AUC = 0.6921) and (B) AUC Decay across $t_{\text{left}}$ time windows.}
 \label{fig:calibration}
 \end{figure}
 
@@ -92,11 +89,11 @@ Experiments were conducted on the **406 resolved buckets (179,065 ticks)** in `p
 \hline
 \textbf{Edge Threshold} & \textbf{Trades} & \textbf{Wins} & \textbf{Win Rate (\%)} & \textbf{Standard 95\% CI} & \textbf{Bonferroni 99.5\% CI} & \textbf{Rigorous Verdict} \\
 \hline
-0.1c ($0.1\%$) & 405 & 220 & 54.3\% & $[49.5\%, 59.2\%]$ & $[47.4\%, 61.3\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
-0.5c ($0.5\%$) & 396 & 200 & 50.5\% & $[45.6\%, 55.4\%]$ & $[43.5\%, 57.6\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
-1.0c ($1.0\%$) & 356 & 191 & 53.7\% & $[48.5\%, 58.8\%]$ & $[46.2\%, 61.1\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
-1.5c ($1.5\%$) & 314 & 161 & 51.3\% & $[45.7\%, 56.8\%]$ & $[43.4\%, 59.2\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
-2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.4\%]$ & $[44.8\%, 62.0\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+0.1c ($0.1\%$) & 406 & 221 & 54.4\% & $[49.6\%, 59.3\%]$ & $[47.5\%, 61.4\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+0.5c ($0.5\%$) & 397 & 201 & 50.6\% & $[45.7\%, 55.5\%]$ & $[43.6\%, 57.7\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+1.0c ($1.0\%$) & 357 & 192 & 53.8\% & $[48.6\%, 58.9\%]$ & $[46.3\%, 61.2\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+1.5c ($1.5\%$) & 315 & 162 & 51.4\% & $[45.9\%, 56.9\%]$ & $[43.5\%, 59.3\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+2.0c ($2.0\%$) & 265 & 142 & 53.6\% & $[47.6\%, 59.5\%]$ & $[44.9\%, 62.1\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
 3.0c ($3.0\%$) & 169 & 98 & 58.0\% & $[50.5\%, 65.4\%]$ & $[47.3\%, 68.6\%]$ & INDISTINGUISHABLE BY BONFERRONI 🟡 \\
 5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.5\%, 68.4\%]$ & $[40.6\%, 73.3\%]$ & INDISTINGUISHABLE BY BONFERRONI 🟡 \\
 \hline
@@ -113,19 +110,19 @@ Experiments were conducted on the **406 resolved buckets (179,065 ticks)** in `p
 \hline
 \textbf{Strategy} & \textbf{Total Fills} & \textbf{Gross Cumulative PnL} & \textbf{Net PnL (18\% Friction)} & \textbf{Bootstrap 95\% CI (Net PnL)} \\
 \hline
-\textbf{Autonomous Market Maker} & \textbf{20,682 fills} & \textbf{+\$5,431.00 USD} & \textbf{+\$4,453.42 USD} & \textbf{$[+\$4,378.96, \; +\$4,530.64]$ USD 🟢} \\
+\textbf{Autonomous Market Maker} & \textbf{20,700 fills} & \textbf{+\$5,424.22 USD} & \textbf{+\$4,447.86 USD} & \textbf{$[+\$4,371.73, \; +\$4,519.92]$ USD 🟢} \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
-\section{Discussion \& Risk Recommendations}
-1. **Invalidity of Directional Taker Strategy**: Upon applying the Bonferroni correction, the 99.5\% confidence intervals for all thresholds (including 3.0c) cross the break-even cutoff. This proves that any apparent edge was a multiple testing false positive.
-2. **Viability of Liquidity Provision**: The Market Maker strategy maintains a Net PnL of **+\$4,453.42 USD** with a 95\% Bootstrap CI ($[+\$4,378, +\$4,530]$) strictly above zero.
-3. **Pre-Trading Warning**: Directional trading is strongly discouraged, and extensive live paper trading is required prior to real capital deployment.
+\section{Discussion \& Sample Audit}
+1. **Information Leakage Evidence**: Binned analysis across $t_{\text{left}}$ reveals AUC is **0.528** initially, **0.612** mid-candle, **0.745** late-candle, and **0.941** in the final 150 seconds. Averaging all ticks falsely inflates overall metrics.
+2. **Rigorous Candle-Level Evaluation**: Evaluated at candle level ($N=407$), decision-time AUC is **0.6921**. Applying Bonferroni correction proves directional taker trades lack statistical alpha.
+3. **Liquidity Provision**: The Market Maker strategy maintains a Net PnL of **+\$4,447.86 USD** with a 95\% Bootstrap CI strictly above zero.
 
 \section{Conclusion}
-Rigorous empirical evaluation on `pmbtc.db` demonstrates that directional taker signals do not offer statistically significant alpha, while autonomous market making with active inventory control represents the sole strategy with demonstrable advantage.
+Eliminating tick-level pseudoreplication confirms early directional forecasting in 15-minute options lacks executable statistical edge, establishing autonomous market making as the sole quantitatively viable strategy.
 
 \begin{thebibliography}{1}
 \bibitem{avellaneda2008} M. Avellaneda and S. Stoikov, ``High-frequency trading in a limit order book,'' \emph{Quantitative Finance}, vol. 8, no. 3, pp. 217--224, 2008.

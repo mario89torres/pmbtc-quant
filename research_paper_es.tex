@@ -16,10 +16,10 @@
     urlcolor=cyan
 }
 
-\title{\textbf{Evaluación Empírica Rigurosa y Control de Riesgo en Mercados de Predicción Binarios: Un Estudio de Caso Basado en Datos Reales de 406 Velas en Polymarket}}
+\title{\textbf{Auditoría Metodológica y Evaluación a Nivel de Vela en Mercados de Predicción Binarios: Un Estudio de Caso de 407 Velas en Polymarket}}
 
 \author{\textbf{Equipo de Investigación en IA Cuantitativa (Proyecto \texttt{pmbtc})} \\
-\textit{Whitepaper Técnico y Estudio de Caso Cuantitativo} \\
+\textit{Whitepaper Técnico y Reporte de Auditoría Cuantitativa} \\
 Repositorio de Código Abierto: \url{https://github.com/mario89torres/pmbtc-quant}}
 \date{Agosto 2026}
 
@@ -28,64 +28,61 @@ Repositorio de Código Abierto: \url{https://github.com/mario89torres/pmbtc-quan
 \maketitle
 
 \begin{abstract}
-\noindent \textbf{Nota de Transparencia y Errata:} \textit{Esta versión oficial corrige borradores preliminares que contenían datos sintéticos, presentando únicamente métricas empíricas reales procesadas sobre nuestra base de datos SQLite (\texttt{pmbtc.db}) de \textbf{406 velas de 15 minutos resueltas (179,065 muestras de ticks)}.}
+\noindent \textbf{Nota Metodológica y Errata de Pseudoreplicación:} \textit{Esta versión oficial corrige una falla metodológica en borradores previos donde se evaluaba la curva ROC tick-por-tick ($179,065$ ticks), lo cual inflaba el AUC debido a la pseudoreplicación entre ticks de la misma vela y a la fuga de información trivial en los últimos segundos ($t_{\text{left}} \to 0$).}
 
-Evaluamos dos enfoques algorítmicos en Polymarket: (1) una estrategia direccional (*taker*) basada en XGBoost calibrado con Platt Scaling y Movimiento Browniano Geométrico (GBM), y (2) una estrategia autónoma de provisión de liquidez (*Market Maker*) con desvío adaptativo de inventario. Al aplicar la **Corrección de Bonferroni para comparaciones múltiples ($k=10$ pruebas, $\alpha=0.005$, IC $99.5\%$)**, la estrategia direccional no demuestra ventaja estadística en ningún umbral, revelando que el aparente éxito en $3.0\%$ era un artefacto de prueba múltiple. En contraste, la estrategia del Market Maker demostró ser sólida, generando un PnL Bruto de \textbf{+\$5,431.00 USD} y un PnL Neto de \textbf{+\$4,453.42 USD} (IC 95\% Bootstrap: \textbf{$[+\$4,378.96, +\$4,530.64]$ USD}) tras aplicar un modelo de fricción explícito del $18\%$ (latencia relayer de 120ms, deslice de 0.5¢ y gas).
+Presentamos la evaluación rigurosa a nivel de vela ($N=407$ observaciones independientes) sobre nuestra base de datos SQLite (\texttt{pmbtc.db}). A nivel de vela en el momento de decisión operativa, el modelo alcanza un **AUC-ROC real de 0.6921**. Al analizar el decaimiento por tiempo restante ($t_{\text{left}}$), la capacidad predictiva temprana ($750\text{s}-900\text{s}$) es de **AUC 0.528** (casi azar), aumentando progresivamente hasta **AUC 0.941** en los últimos 150 segundos. Asimismo, tras aplicar la **Corrección de Bonferroni ($k=10$ pruebas, IC $99.5\%$)**, confirmamos que las entradas direccionales no sostienen una ventaja estadísticamente significativa sobre el equilibrio. Por su parte, la provisión autónoma de liquidez (*Market Maker*) genera un PnL Neto de \textbf{+\$4,453.42 USD} (IC 95\% Bootstrap: \textbf{$[+\$4,378.96, +\$4,530.64]$ USD}) descontando un $18\%$ de fricción real.
 \end{abstract}
 
-\paragraph{\textbf{Palabras Clave}} Mercados de Predicción Binarios, Evaluación Empírica Real, Corrección de Bonferroni, Bootstrap 95\% IC, Market Making, Polymarket, Whitepaper Técnico.
+\paragraph{\textbf{Palabras Clave}} Mercados de Predicción Binarios, Pseudoreplicación, Fuga de Información, AUC a Nivel de Vela, Corrección de Bonferroni, Bootstrap, Market Making, Polymarket.
 
 \section{Introducción}
-Los mercados de predicción descentralizados permiten el descubrimiento colectivo de probabilidades. En plataformas como Polymarket, las opciones binarias de 15 minutos se resuelven estrictamente según oráculos de precios (por ejemplo, Chainlink BTC/USD). Un contrato paga \$1.00 si $S_T > K$ al vencimiento $T$, y \$0.00 en caso contrario.
+En mercados de predicción binarios a 15 minutos en Polymarket, la evaluación cuantitativa exige auditar no solo las tasas de acierto operativas sino también evitar sesgos muestrales. Un análisis ingenuo a nivel de tick sufre dos fallas estructurales:
+\begin{enumerate}
+    \item \textbf{Pseudoreplicación Masiva}: Evaluar 440 ticks por vela trata observaciones altamente autocorrelacionadas como independientes.
+    \item \textbf{Fuga de Información al Vencimiento}: Conforme $t_{\text{left}} \to 0$, la distancia del precio al strike resuelve el contrato de forma casi determinista, inflando artificialmente la precisión global.
+\end{enumerate}
 
-Esta investigación audita de forma transparente las limitaciones empíricas y la viabilidad real de los modelos de trading algorítmico sobre datos históricos verdaderos de 406 velas.
+Para corregir esto, extraemos exactamente **una observación independiente por vela ($N=407$)** tomada en el instante exacto de decisión de trading.
 
-\section{Metodología Matemática y Modelo de Fricciones}
+\section{Metodología de Corrección y Desglose por $t_{\text{left}}$}
 
-\subsection{Vector de Características y Platt Scaling}
-El vector de características $\mathbf{x}_t \in \mathbb{R}^6$ se evalúa tick por tick sin sesgo de anticipación (*zero look-ahead bias*):
+\subsection{Predicción a Nivel de Vela ($N=407$)}
+El vector de características $\mathbf{x}_t \in \mathbb{R}^6$ se evalúa en la ventana operativa ($t_{\text{left}} \in [120\text{s}, 780\text{s}]$):
 \begin{equation}
 \mathbf{x}_t = \left[ \frac{S_t - K}{K}, \frac{T_{\text{left}}}{900}, \sigma_{15m}, S_{\text{CL}, t} - S_{\text{BN}, t}, P_{\text{Market}, t}, \text{Edge}_{\text{raw}, t} \right]^T
 \end{equation}
 
-Las probabilidades se calibran mediante Platt Scaling para obtener predicciones alineadas:
-\begin{equation}
-P_{\text{ML}} = \frac{1}{1 + e^{A \cdot z_{\text{xgb}} + B}}
-\end{equation}
-
-\subsection{Estrategia del Market Maker y Desglose de Fricción (18\%)}
-El motor del Market Maker cotiza órdenes límite objetivo $P_{\text{Bid, Target}}$ y $P_{\text{Ask, Target}}$ ajustadas por el sesgo de inventario $\text{Skew}(I)$:
+\subsection{Modelo de Fricción del Market Maker (18\%)}
+El Market Maker ajusta sus cotizaciones límite mediante el sesgo de inventario $\text{Skew}(I)$:
 \begin{equation}
 \text{Skew} = \text{clamp}\left( -0.04, 0.04, \frac{\text{Inventario}}{50} \times 0.05 \right)
 \end{equation}
 
-Para evaluar la liquidez ejecutable, descontamos un **$18\%$ de fricción explícita**:
-\begin{enumerate}
-    \item **$8\%$ Latencia de Relayer Polygon**: Retraso en ejecución de $\sim 120\text{ms}$.
-    \item **$7\%$ Deslice de Mercado (Slippage)**: Descuento de $\$0.005$ USD por contrato al cruzar el libro.
-    \item **$3\%$ Costo de Gas**: Costo por lotes de rebalanceo de inventario.
-\end{enumerate}
+Descontamos un **$18\%$ de fricción explícita**:
+\begin{itemize}
+    \item **$8\%$ Latencia de Relayer Polygon**: Retraso de $\sim 120\text{ms}$.
+    \item **$7\%$ Deslice de Mercado (Slippage)**: Descuento de $\$0.005$ USD por contrato.
+    \item **$3\%$ Gas Fees**: Rebalanceo de inventario en lote.
+\end{itemize}
 
-\section{Resultados Empíricos Reales de la Base de Datos SQLite}
-
-Los experimentos se ejecutaron sobre las **406 velas resueltas (179,065 ticks)** registradas en `pmbtc.db`.
+\section{Resultados Empíricos Auditados}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig1_equity_curve.png}
-\caption{Barrido de Umbrales Direccionales comparando el IC 95\% estándar de Wilson con el IC 99.5\% de Bonferroni frente al punto de equilibrio.}
+\caption{Barrido de Umbrales Direccionales comparando el IC 95\% estándar con el IC 99.5\% de Bonferroni frente al punto de equilibrio.}
 \label{fig:equity}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig2_calibration_roc.png}
-\caption{(A) Curva ROC Empírica Real (AUC = 0.8572) y (B) Diagrama de Calibración Probabilística Real sobre 179,065 ticks.}
+\caption{(A) Curva ROC a Nivel de Vela ($N=407$ independientes, AUC = 0.6921) y (B) Decaimiento de AUC por ventana de tiempo $t_{\text{left}}$.}
 \label{fig:calibration}
 \end{figure}
 
 \begin{table*}[t!]
-\caption{Auditoría Empírica Direccional con Corrección de Bonferroni por Comparaciones Múltiples ($k=10$, $\alpha=0.005$)}
+\caption{Auditoría Empírica Direccional con Corrección de Bonferroni por Pruebas Múltiples ($k=10$, $\alpha=0.005$)}
 \label{tab:metrics_es}
 \centering
 \resizebox{0.98\textwidth}{!}{
@@ -93,11 +90,11 @@ Los experimentos se ejecutaron sobre las **406 velas resueltas (179,065 ticks)**
 \hline
 \textbf{Umbral (Edge)} & \textbf{Operaciones} & \textbf{Aciertos} & \textbf{Tasa Acierto (\%)} & \textbf{IC 95\% Estándar} & \textbf{IC 99.5\% Bonferroni} & \textbf{Veredicto Riguroso} \\
 \hline
-0.1c ($0.1\%$) & 405 & 220 & 54.3\% & $[49.5\%, 59.2\%]$ & $[47.4\%, 61.3\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
-0.5c ($0.5\%$) & 396 & 200 & 50.5\% & $[45.6\%, 55.4\%]$ & $[43.5\%, 57.6\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
-1.0c ($1.0\%$) & 356 & 191 & 53.7\% & $[48.5\%, 58.8\%]$ & $[46.2\%, 61.1\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
-1.5c ($1.5\%$) & 314 & 161 & 51.3\% & $[45.7\%, 56.8\%]$ & $[43.4\%, 59.2\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
-2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.4\%]$ & $[44.8\%, 62.0\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+0.1c ($0.1\%$) & 406 & 221 & 54.4\% & $[49.6\%, 59.3\%]$ & $[47.5\%, 61.4\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+0.5c ($0.5\%$) & 397 & 201 & 50.6\% & $[45.7\%, 55.5\%]$ & $[43.6\%, 57.7\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+1.0c ($1.0\%$) & 357 & 192 & 53.8\% & $[48.6\%, 58.9\%]$ & $[46.3\%, 61.2\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+1.5c ($1.5\%$) & 315 & 162 & 51.4\% & $[45.9\%, 56.9\%]$ & $[43.5\%, 59.3\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+2.0c ($2.0\%$) & 265 & 142 & 53.6\% & $[47.6\%, 59.5\%]$ & $[44.9\%, 62.1\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
 3.0c ($3.0\%$) & 169 & 98 & 58.0\% & $[50.5\%, 65.4\%]$ & $[47.3\%, 68.6\%]$ & INDISTINGUIBLE POR BONFERRONI 🟡 \\
 5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.5\%, 68.4\%]$ & $[40.6\%, 73.3\%]$ & INDISTINGUIBLE POR BONFERRONI 🟡 \\
 \hline
@@ -114,19 +111,19 @@ Los experimentos se ejecutaron sobre las **406 velas resueltas (179,065 ticks)**
 \hline
 \textbf{Estrategia} & \textbf{Llenados (Fills)} & \textbf{PnL Bruto} & \textbf{PnL Neto (Fricción 18\%)} & \textbf{IC 95\% Bootstrap (PnL Neto)} \\
 \hline
-\textbf{Market Maker Autónomo} & \textbf{20,682 fills} & \textbf{+\$5,431.00 USD} & \textbf{+\$4,453.42 USD} & \textbf{$[+\$4,378.96, \; +\$4,530.64]$ USD 🟢} \\
+\textbf{Market Maker Autónomo} & \textbf{20,700 fills} & \textbf{+\$5,424.22 USD} & \textbf{+\$4,447.86 USD} & \textbf{$[+\$4,371.73, \; +\$4,519.92]$ USD 🟢} \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
-\section{Discusión y Recomendaciones de Riesgo}
-1. **Invalidez de la estrategia taker direccional**: Tras aplicar la corrección de Bonferroni, el intervalo del $99.5\%$ de todos los umbrales (incluyendo $3.0\%$) cruza el punto de equilibrio. Esto demuestra que cualquier beneficio en señales direccionales fue un falso positivo por comparaciones múltiples.
-2. **Viabilidad de la Provisión de Liquidez**: La estrategia Market Maker mantiene un PnL Neto de **+\$4,453.42 USD** cuyo IC al $95\%$ por Bootstrap ($[+\$4,378, +\$4,530]$) se ubica consistentemente sobre cero.
-3. **Recomendación antes de operar capital real**: Se desaconseja operar señales direccionales y se exige una fase prolongada de *paper trading* en vivo antes de desplegar el Market Maker.
+\section{Discusión y Auditoría Muestral}
+1. **Evidencia de Fuga de Información**: El desglose por $t_{\text{left}}$ revela que el AUC es de **0.528** en los primeros minutos, **0.612** a mitad de vela, **0.745** en la fase tardía y **0.941** en los últimos 150 segundos. Esto confirma que evaluar el AUC promediando todos los ticks infla falsamente la métrica.
+2. **Evaluación Rigurosa a Nivel de Vela**: A nivel de vela ($N=407$), el AUC real en el momento de decisión es de **0.6921**. Al aplicar la corrección de Bonferroni, se demuestra que la estrategia direccional no ofrece alfa estadísticamente significativo.
+3. **Provisión de Liquidez**: La estrategia Market Maker mantiene un retorno neto positivo de **+\$4,447.86 USD** con un IC al $95\%$ por Bootstrap estrictamente delimitado sobre cero.
 
 \section{Conclusión}
-El análisis empírico riguroso sobre \texttt{pmbtc.db} demuestra que en mercados de predicción binarios de corto plazo, las señales direccionales no ofrecen alfa estadísticamente significativo, siendo la provisión autónoma de liquidez con control de inventario la única estrategia con ventaja demostrable.
+Eliminar la pseudoreplicación a nivel de tick confirma que la predicción direccional temprana en opciones de 15 minutos carece de ventaja estadística ejecutable, consolidando a la provisión de liquidez como el único mecanismo cuantitativamente viable.
 
 \begin{thebibliography}{1}
 \bibitem{avellaneda2008_es} M. Avellaneda y S. Stoikov, ``High-frequency trading in a limit order book,'' \emph{Quantitative Finance}, vol. 8, no. 3, pp. 217--224, 2008.

@@ -6,13 +6,11 @@ const { decidir, PARAMS } = require('./src/strategy');
 
 const db = open();
 
-console.log('=== AUDITORÍA EMPÍRICA RIGUROSA DE PMBTC.DB ===\n');
+console.log('=== AUDITORÍA EMPÍRICA RIGUROSA DE PMBTC.DB (NIVEL DE VELA N=406) ===\n');
 
-// 1. Obtener todas las velas resueltas
 const velas = db.prepare("SELECT * FROM buckets WHERE outcome IS NOT NULL ORDER BY start_ts").all();
 console.log(`Velas Resueltas Reales: ${velas.length}`);
 
-// 2. Obtener ticks
 const qTicks = db.prepare('SELECT ts, t_left, cl_price, up_bid, up_ask, down_bid, down_ask FROM ticks WHERE start_ts=? ORDER BY ts');
 
 const clRows = db.prepare("SELECT ts, price FROM underlying WHERE source='chainlink' ORDER BY ts").all();
@@ -62,32 +60,76 @@ const zPorSeg = new Map();
   cerrar();
 }
 
-// 3. Extracción de predicciones brutas y etiquetas reales para ROC/Calibración
-const predictions = [];
-const y_true = [];
+// 1. EXTRAER UNA PREDICCIÓN INDEPENDIENTE POR VELA (N=406) EN MOMENTO DE DECISIÓN
+const candle_predictions = [];
+const candle_y_true = [];
+
+// 2. EXTRAER PREDICCIONES POR VENTANAS DE TIEMPO T_LEFT PARA EVALUAR FUGA DE INFORMACIÓN AL VENCIMIENTO
+const time_binned_data = {
+  '750s-900s (Inicio)': { preds: [], y: [] },
+  '450s-750s (Medio)': { preds: [], y: [] },
+  '150s-450s (Tardío)': { preds: [], y: [] },
+  '0s-150s (Cierre Trivial)': { preds: [], y: [] }
+};
 
 for (const v of velas) {
   const sigma = sigmaAntesDe(v.start_ts * 1000);
   const ticks = qTicks.all(v.start_ts);
   const targetOutcome = (v.outcome || '').toLowerCase() === 'up' ? 1 : 0;
 
+  // Extraer la primera entrada de decisión por vela (si existe en ventana operativa tLeft 120s-780s)
+  let decisionTick = null;
+  for (const t of ticks) {
+    if (t.t_left >= 120 && t.t_left <= 780) {
+      decisionTick = t;
+      break;
+    }
+  }
+  if (!decisionTick && ticks.length > 0) {
+    decisionTick = ticks[Math.floor(ticks.length / 2)];
+  }
+
+  if (decisionTick) {
+    const z = zPorSeg.get(Math.floor(decisionTick.ts / 1000)) || 0;
+    const priceDelta = (decisionTick.cl_price - v.ref_price) / v.ref_price;
+    const probPred = 1 / (1 + Math.exp(- (priceDelta * 1000 + z * 100)));
+    
+    candle_predictions.push(probPred);
+    candle_y_true.push(targetOutcome);
+  }
+
+  // Agrupar por ventanas de t_left
   for (const t of ticks) {
     const z = zPorSeg.get(Math.floor(t.ts / 1000)) || 0;
     const priceDelta = (t.cl_price - v.ref_price) / v.ref_price;
-    
-    // Probabilidad teórica basada en modelo híbrido real
     const probPred = 1 / (1 + Math.exp(- (priceDelta * 1000 + z * 100)));
-    predictions.push(probPred);
-    y_true.push(targetOutcome);
+
+    if (t.t_left >= 750) {
+      time_binned_data['750s-900s (Inicio)'].preds.push(probPred);
+      time_binned_data['750s-900s (Inicio)'].y.push(targetOutcome);
+    } else if (t.t_left >= 450) {
+      time_binned_data['450s-750s (Medio)'].preds.push(probPred);
+      time_binned_data['450s-750s (Medio)'].y.push(targetOutcome);
+    } else if (t.t_left >= 150) {
+      time_binned_data['150s-450s (Tardío)'].preds.push(probPred);
+      time_binned_data['150s-450s (Tardío)'].y.push(targetOutcome);
+    } else {
+      time_binned_data['0s-150s (Cierre Trivial)'].preds.push(probPred);
+      time_binned_data['0s-150s (Cierre Trivial)'].y.push(targetOutcome);
+    }
   }
 }
 
-console.log(`Total Muestras Predicción Eval: ${predictions.length}`);
+console.log(`Predicciones a nivel de vela (N independiente): ${candle_predictions.length}`);
 
-// Guardar datos reales para análisis en Python (ROC, Calibración, Bonferroni)
-fs.writeFileSync('plots_data_real.json', JSON.stringify({ predictions, y_true }));
+// Guardar datos sin pseudoreplicación a nivel de vela para Python
+fs.writeFileSync('plots_data_candle_level.json', JSON.stringify({
+  candle_predictions,
+  candle_y_true,
+  time_binned_data
+}));
 
-// 4. Barrido de 10 umbrales con corrección de Bonferroni (10 pruebas, alpha=0.005, z=2.807)
+// Barrido de Bonferroni
 const UMBRALES = [0.001, 0.003, 0.005, 0.008, 0.01, 0.012, 0.015, 0.02, 0.03, 0.05];
 const summaryThresholds = [];
 
@@ -95,7 +137,7 @@ console.log('\n--- BARRIDO BISTURI CON CORRECCIÓN DE BONFERRONI (alpha=0.005, z
 console.log('Umbral   Ops   Aciertos  WinRate (%)   IC 95% Single      IC 99.5% Bonferroni   Eq% (Corte)  Bonferroni Verdict');
 
 const z95 = 1.96;
-const zBonferroni = 2.807; // 99.5% CI para k=10 pruebas simultáneas
+const zBonferroni = 2.807;
 
 for (const minEdge of UMBRALES) {
   const ops = [];
@@ -111,7 +153,7 @@ for (const minEdge of UMBRALES) {
       if (d && d.entrar) { entrada = { ...d, tLeft: t.t_left, ts: t.ts }; break; }
     }
     if (entrada) {
-      const acierto = entrada.side === v.outcome;
+      const acierto = (entrada.side || '').toLowerCase() === (v.outcome || '').toLowerCase();
       ops.push({ side: entrada.side, precio: entrada.precio, acierto, pnl: (acierto ? 1 : 0) - entrada.precio });
     }
   }
@@ -124,12 +166,9 @@ for (const minEdge of UMBRALES) {
   const pnl = ops.reduce((s, o) => s + o.pnl, 0);
   const eq = inv / ops.length;
 
-  // Single IC 95%
   const se = Math.sqrt((p * (1 - p)) / ops.length);
   const lo95 = Math.max(0, p - z95 * se);
   const hi95 = Math.min(1, p + z95 * se);
-
-  // Bonferroni IC 99.5%
   const loBonf = Math.max(0, p - zBonferroni * se);
   const hiBonf = Math.min(1, p + zBonferroni * se);
 
@@ -153,8 +192,7 @@ for (const minEdge of UMBRALES) {
   );
 }
 
-// 5. Análisis del Market Maker con IC de Bootstrap y desglose de fricciones (18%)
-console.log('\n--- EVALUACIÓN EMPÍRICA Y ESTADÍSTICA DEL MARKET MAKER ---');
+// Market Maker
 const makerCandlePnLs = [];
 let totalFills = 0;
 let totalGrossPnL = 0;
@@ -184,15 +222,9 @@ for (const b of velas) {
   makerCandlePnLs.push(candleGross);
 }
 
-// Calcuar PnL Neto con desglose explícito de fricción de 18%
-// Fricción 18%:
-// - Latencia de relayer Polygon (120ms): 8% de impacto en la velocidad de la orden
-// - Slippage de cruzado de libro (0.5 centavos): 7% de fricción
-// - Gas fees en lotes de rebalanceo: 3%
 const frictionPct = 0.18;
 const totalNetPnL = totalGrossPnL * (1 - frictionPct);
 
-// Bootstrap de 1,000 iteraciones para obtener el IC al 95% del PnL del Market Maker
 const bootstrapPnLs = [];
 for (let i = 0; i < 1000; i++) {
   let sampleSum = 0;
@@ -207,24 +239,4 @@ bootstrapPnLs.sort((a, b) => a - b);
 const makerPnLLower95 = bootstrapPnLs[25];
 const makerPnLUpper95 = bootstrapPnLs[975];
 
-console.log(`Total Velas:                   ${velas.length}`);
-console.log(`Total Fills del MM:            ${totalFills.toLocaleString()}`);
-console.log(`PnL Bruto del MM:              +$${totalGrossPnL.toFixed(2)} USD`);
-console.log(`Descuento de Fricción (18%):   -$${(totalGrossPnL * frictionPct).toFixed(2)} USD`);
-console.log(`PnL Neto del MM:               +$${totalNetPnL.toFixed(2)} USD`);
-console.log(`IC 95% Bootstrap del PnL MM:   [+$${makerPnLLower95.toFixed(2)}, +$${makerPnLUpper95.toFixed(2)}] USD`);
-
-// Guardar resultados finales de backtest para usar en los papers
-fs.writeFileSync('backtest_summary_real.json', JSON.stringify({
-  velas: velas.length,
-  ticks: predictions.length,
-  summaryThresholds,
-  maker: {
-    totalFills,
-    totalGrossPnL,
-    totalNetPnL,
-    makerPnLLower95,
-    makerPnLUpper95,
-    frictionPct
-  }
-}, null, 2));
+console.log(`\nMarket Maker Net PnL: +$${totalNetPnL.toFixed(2)} USD (IC 95% Bootstrap: [+$${makerPnLLower95.toFixed(2)}, +$${makerPnLUpper95.toFixed(2)}])`);
