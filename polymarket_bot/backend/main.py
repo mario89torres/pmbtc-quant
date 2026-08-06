@@ -1,8 +1,18 @@
 import os
+import sys
 import json
 import asyncio
 from datetime import datetime
 from typing import List, Dict, Optional
+
+# Asegura que polymarket_bot/ (el padre de este archivo) esté en sys.path,
+# sin importar cómo se haya lanzado el proceso: `python backend/main.py`,
+# `python -m backend.main` o `python -m uvicorn backend.main:app`.
+# Sin esto, `from backend.bot import ...` y el `uvicorn.run("backend.main:app")`
+# de más abajo fallan con "ModuleNotFoundError: No module named 'backend'"
+# cuando se invoca por ruta de archivo en vez de como módulo.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Body
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -248,4 +258,5 @@ async def get_bot_status():
 
 
 if __name__ == "__main__":
-    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=port, reload=True)
