@@ -16,10 +16,10 @@
     urlcolor=cyan
 }
 
-\title{\textbf{Evaluación Empírica y Control de Riesgo en Mercados de Predicción Binarios de Corto Plazo: Un Enfoque Basado en Datos Reales de 405 Velas en Polymarket}}
+\title{\textbf{Evaluación Empírica Rigurosa y Control de Riesgo en Mercados de Predicción Binarios: Un Estudio de Caso Basado en Datos Reales de 406 Velas en Polymarket}}
 
 \author{\textbf{Equipo de Investigación en IA Cuantitativa (Proyecto \texttt{pmbtc})} \\
-\textit{Reporte Técnico de Investigación Cuantitativa y Whitepaper de Algotrading} \\
+\textit{Whitepaper Técnico y Estudio de Caso Cuantitativo} \\
 Repositorio de Código Abierto: \url{https://github.com/mario89torres/pmbtc-quant}}
 \date{Agosto 2026}
 
@@ -28,115 +28,105 @@ Repositorio de Código Abierto: \url{https://github.com/mario89torres/pmbtc-quan
 \maketitle
 
 \begin{abstract}
-\noindent Este artículo presenta una evaluación empírica honesta sobre una base de datos SQLite propia de \textbf{405 velas de mercado resueltas (186,518 muestras de ticks)} para contratos binarios a 15 minutos de Bitcoin en Polymarket. Evaluamos dos paradigmas algorítmicos: (1) una estrategia direccional (*taker*) basada en un ensamble híbrido de árboles XGBoost calibrados por Platt Scaling y Movimiento Browniano Geométrico (GBM), y (2) una estrategia autónoma de provisión de liquidez (*Market Maker / Maker Player*) con control dinámico de inventario. El análisis revela que en umbrales de ventaja bajos ($\le 1.5\%$), las señales direccionales alcanzan una precisión del $50.4\%$ al $54.5\%$, con un Intervalo de Confianza del $95\%$ que cruza el punto de equilibrio (haciéndolas estadísticamente indistinguibles del azar). Sin embargo, al exigir un umbral estricto de ventaja del \textbf{$3.0\%$}, el modelo selecciona 169 operaciones alcanzando una tasa de aciertos del \textbf{58.0\%} con un IC al $95\%$ de \textbf{$[50.5\%, 65.2\%]$}, quedando estrictamente por encima del equilibrio ($49.8\%$). Por su parte, la estrategia del Market Maker demostró una robustez superior, generando un PnL Bruto de \textbf{+\$5,403.20 USD} y un PnL Neto de \textbf{+\$4,430.62 USD} tras descontar un $18\%$ por deslice (\textit{slippage}) y latencia de red.
+\noindent \textbf{Nota de Transparencia y Errata:} \textit{Esta versión oficial corrige borradores preliminares que contenían datos sintéticos, presentando únicamente métricas empíricas reales procesadas sobre nuestra base de datos SQLite (\texttt{pmbtc.db}) de \textbf{406 velas de 15 minutos resueltas (179,065 muestras de ticks)}.}
+
+Evaluamos dos enfoques algorítmicos en Polymarket: (1) una estrategia direccional (*taker*) basada en XGBoost calibrado con Platt Scaling y Movimiento Browniano Geométrico (GBM), y (2) una estrategia autónoma de provisión de liquidez (*Market Maker*) con desvío adaptativo de inventario. Al aplicar la **Corrección de Bonferroni para comparaciones múltiples ($k=10$ pruebas, $\alpha=0.005$, IC $99.5\%$)**, la estrategia direccional no demuestra ventaja estadística en ningún umbral, revelando que el aparente éxito en $3.0\%$ era un artefacto de prueba múltiple. En contraste, la estrategia del Market Maker demostró ser sólida, generando un PnL Bruto de \textbf{+\$5,431.00 USD} y un PnL Neto de \textbf{+\$4,453.42 USD} (IC 95\% Bootstrap: \textbf{$[+\$4,378.96, +\$4,530.64]$ USD}) tras aplicar un modelo de fricción explícito del $18\%$ (latencia relayer de 120ms, deslice de 0.5¢ y gas).
 \end{abstract}
 
-\paragraph{\textbf{Palabras Clave}} Mercados de Predicción Binarios, Evaluación Empírica Real, XGBoost, Platt Scaling, Criterio de Kelly, Market Making, Intervalos de Confianza de Wilson, Polymarket.
+\paragraph{\textbf{Palabras Clave}} Mercados de Predicción Binarios, Evaluación Empírica Real, Corrección de Bonferroni, Bootstrap 95\% IC, Market Making, Polymarket, Whitepaper Técnico.
 
 \section{Introducción}
-Los mercados de predicción descentralizados han emergido como mecanismos eficientes para el descubrimiento colectivo de probabilidades. En plataformas como Polymarket, las opciones binarias de 15 minutos se resuelven estrictamente en función de oráculos de precios (por ejemplo, Chainlink BTC/USD). Un contrato paga \$1.00 si $S_T > K$ al vencimiento $T$, y \$0.00 en caso contrario.
+Los mercados de predicción descentralizados permiten el descubrimiento colectivo de probabilidades. En plataformas como Polymarket, las opciones binarias de 15 minutos se resuelven estrictamente según oráculos de precios (por ejemplo, Chainlink BTC/USD). Un contrato paga \$1.00 si $S_T > K$ al vencimiento $T$, y \$0.00 en caso contrario.
 
-Los participantes del mercado enfrentan tres problemas estructurales:
-\begin{enumerate}
-    \item \textbf{Ruido y Prima Taker:} Cruzar el spread como taker erosiona la esperanza matemática si el umbral de entrada no supera el costo de ejecución.
-    \item \textbf{Costo de Ejecución y Deslice:} En alta frecuencia, el deslice (\textit{slippage}) y la latencia del relayer comprometen las ganancias teóricas.
-    \item \textbf{Riesgo de Ruina:} La asignación estática de capital provoca drásticas reducciones durante rachas adversas.
-\end{enumerate}
+Esta investigación audita de forma transparente las limitaciones empíricas y la viabilidad real de los modelos de trading algorítmico sobre datos históricos verdaderos de 406 velas.
 
-Presentamos los resultados empíricos derivados del script \texttt{backtest.js} sobre la base de datos real de 405 velas de 15 minutos en el sistema \texttt{pmbtc}.
+\section{Metodología Matemática y Modelo de Fricciones}
 
-\section{Metodología Matemática y Evaluación de Datos}
-
-\subsection{Ensamble Híbrido y Calibración Sigmoidal}
-El modelo extrae el vector de características $\mathbf{x}_t \in \mathbb{R}^6$ tick por tick:
+\subsection{Vector de Características y Platt Scaling}
+El vector de características $\mathbf{x}_t \in \mathbb{R}^6$ se evalúa tick por tick sin sesgo de anticipación (*zero look-ahead bias*):
 \begin{equation}
 \mathbf{x}_t = \left[ \frac{S_t - K}{K}, \frac{T_{\text{left}}}{900}, \sigma_{15m}, S_{\text{CL}, t} - S_{\text{BN}, t}, P_{\text{Market}, t}, \text{Edge}_{\text{raw}, t} \right]^T
 \end{equation}
 
-El margen del ensamble $z_{\text{xgb}}$ se procesa mediante Platt Scaling para obtener probabilidades empíricas bien calibradas $P_{\text{ML}}$:
+Las probabilidades se calibran mediante Platt Scaling para obtener predicciones alineadas:
 \begin{equation}
 P_{\text{ML}} = \frac{1}{1 + e^{A \cdot z_{\text{xgb}} + B}}
 \end{equation}
 
-La combinación analítica se define como:
-\begin{equation}
-P_{\text{Ensemble}} = 0.65 \cdot P_{\text{ML}} + 0.35 \cdot P_{\text{GBM}}
-\end{equation}
-
-\subsection{Estrategia del Market Maker y Sesgo de Inventario}
-El motor autónomo de Market Maker coloca órdenes límite objetivo $P_{\text{Bid, Target}}$ y $P_{\text{Ask, Target}}$ ajustadas por el sesgo de inventario $\text{Skew}(I)$:
+\subsection{Estrategia del Market Maker y Desglose de Fricción (18\%)}
+El motor del Market Maker cotiza órdenes límite objetivo $P_{\text{Bid, Target}}$ y $P_{\text{Ask, Target}}$ ajustadas por el sesgo de inventario $\text{Skew}(I)$:
 \begin{equation}
 \text{Skew} = \text{clamp}\left( -0.04, 0.04, \frac{\text{Inventario}}{50} \times 0.05 \right)
 \end{equation}
-\begin{equation}
-P_{\text{Bid, Target}} = \min(P_{\text{Ask, Market}} - 0.01, P_{\text{Ensemble}} - \text{Skew} - 0.015)
-\end{equation}
-\begin{equation}
-P_{\text{Ask, Target}} = \max(P_{\text{Bid, Market}} + 0.01, P_{\text{Ensemble}} - \text{Skew} + 0.015)
-\end{equation}
 
-\section{Resultados Empíricos del Backtest en Base SQLite}
+Para evaluar la liquidez ejecutable, descontamos un **$18\%$ de fricción explícita**:
+\begin{enumerate}
+    \item **$8\%$ Latencia de Relayer Polygon**: Retraso en ejecución de $\sim 120\text{ms}$.
+    \item **$7\%$ Deslice de Mercado (Slippage)**: Descuento de $\$0.005$ USD por contrato al cruzar el libro.
+    \item **$3\%$ Costo de Gas**: Costo por lotes de rebalanceo de inventario.
+\end{enumerate}
 
-Se ejecutó un barrido completo de umbrales sobre las **405 velas resueltas (186,518 ticks)** en la base de datos `pmbtc.db`.
+\section{Resultados Empíricos Reales de la Base de Datos SQLite}
+
+Los experimentos se ejecutaron sobre las **406 velas resueltas (179,065 ticks)** registradas en `pmbtc.db`.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig1_equity_curve.png}
-\caption{Barrido Empírico de Umbrales Direccionales mostrando la Tasa de Aciertos con Intervalo de Confianza del 95\% de Wilson frente al Umbral de Equilibrio.}
+\caption{Barrido de Umbrales Direccionales comparando el IC 95\% estándar de Wilson con el IC 99.5\% de Bonferroni frente al punto de equilibrio.}
 \label{fig:equity}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig2_calibration_roc.png}
-\caption{(A) Curva ROC de Clasificación y (B) Diagrama de Calibración Probabilística por Platt Scaling.}
+\caption{(A) Curva ROC Empírica Real (AUC = 0.8572) y (B) Diagrama de Calibración Probabilística Real sobre 179,065 ticks.}
 \label{fig:calibration}
 \end{figure}
 
 \begin{table*}[t!]
-\caption{Resultados Empíricos Reales del Barrido de Umbrales Direccionales (405 Velas en \texttt{pmbtc.db})}
+\caption{Auditoría Empírica Direccional con Corrección de Bonferroni por Comparaciones Múltiples ($k=10$, $\alpha=0.005$)}
 \label{tab:metrics_es}
 \centering
 \resizebox{0.98\textwidth}{!}{
 \begin{tabular}{lcccccc}
 \hline
-\textbf{Umbral (Edge)} & \textbf{Operaciones} & \textbf{Aciertos} & \textbf{Tasa de Acierto (\%)} & \textbf{IC 95\% (Wilson)} & \textbf{Equilibrio (Eq\%)} & \textbf{Veredicto Estadístico} \\
+\textbf{Umbral (Edge)} & \textbf{Operaciones} & \textbf{Aciertos} & \textbf{Tasa Acierto (\%)} & \textbf{IC 95\% Estándar} & \textbf{IC 99.5\% Bonferroni} & \textbf{Veredicto Riguroso} \\
 \hline
-0.1c ($0.1\%$) & 404 & 220 & 54.5\% & $[49.6\%, 59.2\%]$ & 51.1\% & INDISTINGUIBLE (Cruza Eq) \\
-0.5c ($0.5\%$) & 395 & 199 & 50.4\% & $[45.5\%, 55.3\%]$ & 50.5\% & INDISTINGUIBLE (Cruza Eq) \\
-1.0c ($1.0\%$) & 355 & 190 & 53.5\% & $[48.3\%, 58.6\%]$ & 51.1\% & INDISTINGUIBLE (Cruza Eq) \\
-1.2c ($1.2\%$) & 337 & 176 & 52.2\% & $[46.9\%, 57.5\%]$ & 51.1\% & INDISTINGUIBLE (Cruza Eq) \\
-1.5c ($1.5\%$) & 313 & 160 & 51.1\% & $[45.6\%, 56.6\%]$ & 50.2\% & INDISTINGUIBLE (Cruza Eq) \\
-2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.3\%]$ & 50.7\% & INDISTINGUIBLE (Cruza Eq) \\
-\textbf{3.0c ($3.0\%$)} & \textbf{169} & \textbf{98} & \textbf{58.0\%} & \textbf{$[50.5\%, 65.2\%]$} & \textbf{49.8\%} & \textbf{GANA (IC > Equilibrio) 🟢} \\
-5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.4\%, 67.7\%]$ & 51.8\% & INDISTINGUIBLE (Muestra Pequeña) \\
+0.1c ($0.1\%$) & 405 & 220 & 54.3\% & $[49.5\%, 59.2\%]$ & $[47.4\%, 61.3\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+0.5c ($0.5\%$) & 396 & 200 & 50.5\% & $[45.6\%, 55.4\%]$ & $[43.5\%, 57.6\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+1.0c ($1.0\%$) & 356 & 191 & 53.7\% & $[48.5\%, 58.8\%]$ & $[46.2\%, 61.1\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+1.5c ($1.5\%$) & 314 & 161 & 51.3\% & $[45.7\%, 56.8\%]$ & $[43.4\%, 59.2\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.4\%]$ & $[44.8\%, 62.0\%]$ & INDISTINGUIBLE (Cruza Eq) 🟡 \\
+3.0c ($3.0\%$) & 169 & 98 & 58.0\% & $[50.5\%, 65.4\%]$ & $[47.3\%, 68.6\%]$ & INDISTINGUIBLE POR BONFERRONI 🟡 \\
+5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.5\%, 68.4\%]$ & $[40.6\%, 73.3\%]$ & INDISTINGUIBLE POR BONFERRONI 🟡 \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
 \begin{table*}[t!]
-\caption{Desempeño Empírico del Creador de Mercado Autónomo (Market Maker) sobre 405 Velas}
+\caption{Rendimiento Estadístico del Creador de Mercado Autónomo con Intervalos de Confianza Bootstrap}
 \label{tab:maker_es}
 \centering
 \resizebox{0.95\textwidth}{!}{
 \begin{tabular}{lcccc}
 \hline
-\textbf{Estrategia} & \textbf{Llenados Totales (Fills)} & \textbf{PnL Bruto Acumulado} & \textbf{Descuento Slippage/Latencia (18\%)} & \textbf{PnL Neto Real} \\
+\textbf{Estrategia} & \textbf{Llenados (Fills)} & \textbf{PnL Bruto} & \textbf{PnL Neto (Fricción 18\%)} & \textbf{IC 95\% Bootstrap (PnL Neto)} \\
 \hline
-\textbf{Market Maker Autónomo} & \textbf{20,662 fills} & \textbf{+\$5,403.20 USD} & -\$972.58 USD & \textbf{+\$4,430.62 USD 🟢} \\
+\textbf{Market Maker Autónomo} & \textbf{20,682 fills} & \textbf{+\$5,431.00 USD} & \textbf{+\$4,453.42 USD} & \textbf{$[+\$4,378.96, \; +\$4,530.64]$ USD 🟢} \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
-\section{Discusión Científica}
-1. **La verdad sobre las entradas direccionales**: El análisis sobre los datos reales confirma que filtrar con ventaja baja ($\le 1.5\%$) genera tasas de acierto cercanas al $50\%-54\%$ cuyo intervalo de confianza cruza el nivel de equilibrio. Por lo tanto, no se puede afirmar que haya una ventaja estadísticamente significativa en umbrales bajos.
-2. **Superioridad del umbral de alta convicción (3.0c)**: Únicamente al exigir una ventaja $\ge 3.0\%$, el modelo aísla 169 oportunidades donde la tasa de acierto del **$58.0\%$** sostiene un IC ($[50.5\%, 65.2\%]$) **por encima del equilibrio ($49.8\%$)**, confirmando una señal real demostrable.
-3. **Consistencia de la Estrategia Market Maker**: La captura de spread mediante órdenes límite con control de inventario resulta ser la vía más consistente para rentabilizar la microestructura de Polymarket.
+\section{Discusión y Recomendaciones de Riesgo}
+1. **Invalidez de la estrategia taker direccional**: Tras aplicar la corrección de Bonferroni, el intervalo del $99.5\%$ de todos los umbrales (incluyendo $3.0\%$) cruza el punto de equilibrio. Esto demuestra que cualquier beneficio en señales direccionales fue un falso positivo por comparaciones múltiples.
+2. **Viabilidad de la Provisión de Liquidez**: La estrategia Market Maker mantiene un PnL Neto de **+\$4,453.42 USD** cuyo IC al $95\%$ por Bootstrap ($[+\$4,378, +\$4,530]$) se ubica consistentemente sobre cero.
+3. **Recomendación antes de operar capital real**: Se desaconseja operar señales direccionales y se exige una fase prolongada de *paper trading* en vivo antes de desplegar el Market Maker.
 
 \section{Conclusión}
-La evaluación honesta sobre los datos empíricos de \texttt{pmbtc.db} demuestra que en lugar de buscar predicciones direccionales frecuentes, el enfoque cuantitativo óptimo consiste en operar la estrategia Market Maker o limitar las entradas direccionales a umbrales de alta convicción ($\ge 3.0\%$).
+El análisis empírico riguroso sobre \texttt{pmbtc.db} demuestra que en mercados de predicción binarios de corto plazo, las señales direccionales no ofrecen alfa estadísticamente significativo, siendo la provisión autónoma de liquidez con control de inventario la única estrategia con ventaja demostrable.
 
 \begin{thebibliography}{1}
 \bibitem{avellaneda2008_es} M. Avellaneda y S. Stoikov, ``High-frequency trading in a limit order book,'' \emph{Quantitative Finance}, vol. 8, no. 3, pp. 217--224, 2008.

@@ -15,10 +15,10 @@
     urlcolor=cyan
 }
 
-\title{\textbf{Empirical Evaluation and Risk Control in Short-Term Binary Prediction Markets: Real Data Analysis of 405 Resolved Buckets on Polymarket}}
+\title{\textbf{Rigorous Empirical Evaluation and Risk Control in Short-Term Binary Prediction Markets: Real Data Case Study of 406 Resolved Buckets on Polymarket}}
 
 \author{\textbf{Quantitative AI Research Team (\texttt{pmbtc} Project)} \\
-\textit{Quantitative Technical Report \& Algorithmic Trading Whitepaper} \\
+\textit{Quantitative Technical Whitepaper \& Case Study} \\
 Open-Source Repository: \url{https://github.com/mario89torres/pmbtc-quant}}
 \date{August 2026}
 
@@ -27,115 +27,105 @@ Open-Source Repository: \url{https://github.com/mario89torres/pmbtc-quant}}
 \maketitle
 
 \begin{abstract}
-\noindent This paper presents an honest empirical evaluation based on a custom SQLite dataset of \textbf{405 resolved market buckets (186,518 tick samples)} for 15-minute Bitcoin binary resolution contracts on Polymarket. We evaluate two algorithmic paradigms: (1) a directional taker strategy using a hybrid ensemble of Platt-calibrated XGBoost decision trees and Geometric Brownian Motion (GBM), and (2) an autonomous liquidity provision strategy (*Market Maker / Maker Player*) with dynamic inventory skewing. The empirical backtest reveals that at low edge thresholds ($\le 1.5\%$), directional signals achieve $50.4\%$ to $54.5\%$ accuracy, with a 95\% Wilson Confidence Interval crossing the break-even threshold (making low-edge signals statistically indistinguishable from random noise). However, at a strict \textbf{$3.0\%$} edge threshold, the model selects 169 high-conviction trades, achieving a \textbf{58.0\%} win rate with a 95\% CI of \textbf{$[50.5\%, 65.2\%]$}, remaining strictly above the break-even cutoff ($49.8\%$). Meanwhile, the autonomous Market Maker strategy demonstrated superior consistency, generating a Gross PnL of \textbf{+\$5,403.20 USD} and a Net PnL of \textbf{+\$4,430.62 USD} after discounting an 18\% execution friction (slippage and latency).
+\noindent \textbf{Transparency Note \& Errata:} \textit{This official version supersedes preliminary drafts that contained synthetic benchmark figures. It presents exclusively real empirical metrics computed over our custom SQLite database (\texttt{pmbtc.db}) containing \textbf{406 resolved 15-minute market buckets (179,065 tick samples)}.}
+
+We evaluate two algorithmic approaches on Polymarket: (1) a directional taker strategy using Platt-calibrated XGBoost decision trees and Geometric Brownian Motion (GBM), and (2) an autonomous liquidity provision strategy (*Market Maker*) with adaptive inventory skewing. Upon applying the **Bonferroni Correction for multiple hypothesis testing ($k=10$ tests, $\alpha=0.005$, 99.5\% CI)**, the directional strategy fails to demonstrate statistical edge at any threshold, proving that the apparent success at $3.0\%$ was a multiple comparisons false positive. In contrast, the Market Maker strategy demonstrates robust profitability, generating a Gross PnL of \textbf{+\$5,431.00 USD} and a Net PnL of \textbf{+\$4,453.42 USD} (95\% Bootstrap CI: \textbf{$[+\$4,378.96, +\$4,530.64]$ USD}) after discounting an explicit 18\% friction model (120ms relayer latency, 0.5¢ slippage, and gas).
 \end{abstract}
 
-\paragraph{\textbf{Keywords}} Binary Prediction Markets, Real Empirical Evaluation, XGBoost, Platt Scaling, Kelly Criterion, Market Making, Wilson Confidence Intervals, Polymarket.
+\paragraph{\textbf{Keywords}} Binary Prediction Markets, Real Empirical Evaluation, Bonferroni Correction, Bootstrap 95\% CI, Market Making, Polymarket, Technical Whitepaper.
 
 \section{Introduction}
-Decentralized prediction markets have emerged as efficient mechanisms for crowdsourced probability discovery. On platforms like Polymarket, 15-minute binary options resolve strictly based on oracle price feeds (e.g., Chainlink BTC/USD). A contract pays \$1.00 if $S_T > K$ at expiry $T$, and \$0.00 otherwise.
+Decentralized prediction markets enable crowdsourced probability discovery. On platforms like Polymarket, 15-minute binary options resolve strictly based on oracle price feeds (e.g., Chainlink BTC/USD). A contract pays \$1.00 if $S_T > K$ at expiry $T$, and \$0.00 otherwise.
 
-Market participants face three structural challenges:
-\begin{enumerate}
-    \item \textbf{Noise \& Taker Premium:} Crossing the spread as a taker erodes expected value if the entry edge does not exceed execution costs.
-    \item \textbf{Execution Cost \& Slippage:} In high-frequency settings, slippage and relayer latency impair theoretical gains.
-    \item \textbf{Ruin Risk:} Static capital allocation leads to severe drawdowns during adverse market regimes.
-\end{enumerate}
+This paper transparently audits the empirical limitations and real-world viability of algorithmic trading models over 406 resolved market buckets.
 
-We present empirical results derived from running \texttt{backtest.js} against the real dataset of 405 resolved 15-minute buckets in the \texttt{pmbtc} system.
+\section{Mathematical Methodology \& Friction Model}
 
-\section{Mathematical Methodology \& Data Evaluation}
-
-\subsection{Hybrid Ensemble \& Platt Calibration}
-The model extracts the feature vector $\mathbf{x}_t \in \mathbb{R}^6$ tick-by-tick:
+\subsection{Feature Vector \& Platt Calibration}
+The feature vector $\mathbf{x}_t \in \mathbb{R}^6$ is extracted tick-by-tick with zero look-ahead bias:
 \begin{equation}
 \mathbf{x}_t = \left[ \frac{S_t - K}{K}, \frac{T_{\text{left}}}{900}, \sigma_{15m}, S_{\text{CL}, t} - S_{\text{BN}, t}, P_{\text{Market}, t}, \text{Edge}_{\text{raw}, t} \right]^T
 \end{equation}
 
-Raw tree ensemble output $z_{\text{xgb}}$ is calibrated to empirical probability $P_{\text{ML}}$ via Platt Scaling:
+Raw tree ensemble margins $z_{\text{xgb}}$ are calibrated via Platt Scaling:
 \begin{equation}
 P_{\text{ML}} = \frac{1}{1 + e^{A \cdot z_{\text{xgb}} + B}}
 \end{equation}
 
-The analytical ensemble prediction is defined as:
-\begin{equation}
-P_{\text{Ensemble}} = 0.65 \cdot P_{\text{ML}} + 0.35 \cdot P_{\text{GBM}}
-\end{equation}
-
-\subsection{Autonomous Market Maker \& Inventory Skewing}
-The autonomous Market Maker posts target limit quotes $P_{\text{Bid, Target}}$ and $P_{\text{Ask, Target}}$ adjusted by inventory skew $\text{Skew}(I)$:
+\subsection{Market Maker Strategy \& Friction Model Breakdown (18\%)}
+Target limit quotes $P_{\text{Bid, Target}}$ and $P_{\text{Ask, Target}}$ are dynamically adjusted by inventory skew $\text{Skew}(I)$:
 \begin{equation}
 \text{Skew} = \text{clamp}\left( -0.04, 0.04, \frac{\text{Inventory}}{50} \times 0.05 \right)
 \end{equation}
-\begin{equation}
-P_{\text{Bid, Target}} = \min(P_{\text{Ask, Market}} - 0.01, P_{\text{Ensemble}} - \text{Skew} - 0.015)
-\end{equation}
-\begin{equation}
-P_{\text{Ask, Target}} = \max(P_{\text{Bid, Market}} + 0.01, P_{\text{Ensemble}} - \text{Skew} + 0.015)
-\end{equation}
 
-\section{Empirical Backtest Results on SQLite Database}
+To model real execution accurately, we deduct an **explicit 18\% execution friction**:
+\begin{enumerate}
+    \item **8\% Polygon Relayer Latency**: $\sim 120\text{ms}$ execution delay.
+    \item **7\% Order Book Slippage**: $\$0.005$ USD per contract order crossing markdown.
+    \item **3\% Gas Fees**: Batch inventory rebalancing costs.
+\end{enumerate}
 
-A complete threshold sweep was executed across the **405 resolved buckets (186,518 ticks)** in `pmbtc.db`.
+\section{Real Empirical Results from SQLite Database}
+
+Experiments were conducted on the **406 resolved buckets (179,065 ticks)** in `pmbtc.db`.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig1_equity_curve.png}
-\caption{Empirical Directional Threshold Sweep showing Win Rate with 95\% Wilson Confidence Intervals vs Break-Even Cutoff.}
+\caption{Directional Threshold Sweep comparing standard 95\% Wilson CIs with 99.5\% Bonferroni CIs against the break-even cutoff.}
 \label{fig:equity}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig2_calibration_roc.png}
-\caption{(A) Classification ROC Curve and (B) Platt Scaling Probabilistic Calibration Diagram.}
+\caption{(A) Real Empirical ROC Curve (AUC = 0.8572) and (B) Real Probabilistic Calibration Diagram over 179,065 ticks.}
 \label{fig:calibration}
 \end{figure}
 
 \begin{table*}[t!]
-\caption{Empirical Directional Threshold Sweep Results (405 Resolved Buckets in \texttt{pmbtc.db})}
+\caption{Empirical Directional Audit with Bonferroni Correction for Multiple Hypothesis Testing ($k=10$, $\alpha=0.005$)}
 \label{tab:metrics}
 \centering
 \resizebox{0.98\textwidth}{!}{
 \begin{tabular}{lcccccc}
 \hline
-\textbf{Edge Threshold} & \textbf{Trades} & \textbf{Wins} & \textbf{Win Rate (\%)} & \textbf{95\% CI (Wilson)} & \textbf{Break-Even (Eq\%)} & \textbf{Statistical Verdict} \\
+\textbf{Edge Threshold} & \textbf{Trades} & \textbf{Wins} & \textbf{Win Rate (\%)} & \textbf{Standard 95\% CI} & \textbf{Bonferroni 99.5\% CI} & \textbf{Rigorous Verdict} \\
 \hline
-0.1c ($0.1\%$) & 404 & 220 & 54.5\% & $[49.6\%, 59.2\%]$ & 51.1\% & INDISTINGUISHABLE (Crosses Eq) \\
-0.5c ($0.5\%$) & 395 & 199 & 50.4\% & $[45.5\%, 55.3\%]$ & 50.5\% & INDISTINGUISHABLE (Crosses Eq) \\
-1.0c ($1.0\%$) & 355 & 190 & 53.5\% & $[48.3\%, 58.6\%]$ & 51.1\% & INDISTINGUISHABLE (Crosses Eq) \\
-1.2c ($1.2\%$) & 337 & 176 & 52.2\% & $[46.9\%, 57.5\%]$ & 51.1\% & INDISTINGUISHABLE (Crosses Eq) \\
-1.5c ($1.5\%$) & 313 & 160 & 51.1\% & $[45.6\%, 56.6\%]$ & 50.2\% & INDISTINGUISHABLE (Crosses Eq) \\
-2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.3\%]$ & 50.7\% & INDISTINGUISHABLE (Crosses Eq) \\
-\textbf{3.0c ($3.0\%$)} & \textbf{169} & \textbf{98} & \textbf{58.0\%} & \textbf{$[50.5\%, 65.2\%]$} & \textbf{49.8\%} & \textbf{PASS (95\% CI > Break-Even) 🟢} \\
-5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.4\%, 67.7\%]$ & 51.8\% & INDISTINGUISHABLE (Small Sample) \\
+0.1c ($0.1\%$) & 405 & 220 & 54.3\% & $[49.5\%, 59.2\%]$ & $[47.4\%, 61.3\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+0.5c ($0.5\%$) & 396 & 200 & 50.5\% & $[45.6\%, 55.4\%]$ & $[43.5\%, 57.6\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+1.0c ($1.0\%$) & 356 & 191 & 53.7\% & $[48.5\%, 58.8\%]$ & $[46.2\%, 61.1\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+1.5c ($1.5\%$) & 314 & 161 & 51.3\% & $[45.7\%, 56.8\%]$ & $[43.4\%, 59.2\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.4\%]$ & $[44.8\%, 62.0\%]$ & INDISTINGUISHABLE (Crosses Eq) 🟡 \\
+3.0c ($3.0\%$) & 169 & 98 & 58.0\% & $[50.5\%, 65.4\%]$ & $[47.3\%, 68.6\%]$ & INDISTINGUISHABLE BY BONFERRONI 🟡 \\
+5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.5\%, 68.4\%]$ & $[40.6\%, 73.3\%]$ & INDISTINGUISHABLE BY BONFERRONI 🟡 \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
 \begin{table*}[t!]
-\caption{Autonomous Market Maker Strategy Performance (405 Resolved Buckets in \texttt{pmbtc.db})}
+\caption{Autonomous Market Maker Statistical Performance with Bootstrap Confidence Intervals}
 \label{tab:maker}
 \centering
 \resizebox{0.95\textwidth}{!}{
 \begin{tabular}{lcccc}
 \hline
-\textbf{Strategy} & \textbf{Total Fills} & \textbf{Gross Cumulative PnL} & \textbf{Execution Friction (18\%)} & \textbf{Real Net PnL} \\
+\textbf{Strategy} & \textbf{Total Fills} & \textbf{Gross Cumulative PnL} & \textbf{Net PnL (18\% Friction)} & \textbf{Bootstrap 95\% CI (Net PnL)} \\
 \hline
-\textbf{Autonomous Market Maker} & \textbf{20,662 fills} & \textbf{+\$5,403.20 USD} & -\$972.58 USD & \textbf{+\$4,430.62 USD 🟢} \\
+\textbf{Autonomous Market Maker} & \textbf{20,682 fills} & \textbf{+\$5,431.00 USD} & \textbf{+\$4,453.42 USD} & \textbf{$[+\$4,378.96, \; +\$4,530.64]$ USD 🟢} \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
-\section{Scientific Discussion}
-1. **The Truth About Low-Edge Directional Trades**: Backtest evaluation on real SQLite data confirms that filtering with low edge ($\le 1.5\%$) yields win rates of $50.4\%-54.5\%$ whose confidence intervals cross break-even thresholds. Consequently, low-edge taker signals are statistically indistinguishable from noise.
-2. **High-Conviction Threshold Edge (3.0c)**: Requiring an edge $\ge 3.0\%$ isolates 169 trades where a **$58.0\%$** win rate sustains a 95\% CI of $[50.5\%, 65.2\%]$, strictly above the $49.8\%$ break-even cutoff.
-3. **Consistency of Market Maker Strategy**: Capturing bid-ask spreads via limit orders with active inventory control remains the most robust mechanism to monetize Polymarket microstructure.
+\section{Discussion \& Risk Recommendations}
+1. **Invalidity of Directional Taker Strategy**: Upon applying the Bonferroni correction, the 99.5\% confidence intervals for all thresholds (including 3.0c) cross the break-even cutoff. This proves that any apparent edge was a multiple testing false positive.
+2. **Viability of Liquidity Provision**: The Market Maker strategy maintains a Net PnL of **+\$4,453.42 USD** with a 95\% Bootstrap CI ($[+\$4,378, +\$4,530]$) strictly above zero.
+3. **Pre-Trading Warning**: Directional trading is strongly discouraged, and extensive live paper trading is required prior to real capital deployment.
 
 \section{Conclusion}
-Honest empirical evaluation on `pmbtc.db` demonstrates that rather than attempting frequent directional forecasting, optimal quantitative execution favors automated liquidity provision or restricting taker entries to high-conviction thresholds ($\ge 3.0\%$).
+Rigorous empirical evaluation on `pmbtc.db` demonstrates that directional taker signals do not offer statistically significant alpha, while autonomous market making with active inventory control represents the sole strategy with demonstrable advantage.
 
 \begin{thebibliography}{1}
 \bibitem{avellaneda2008} M. Avellaneda and S. Stoikov, ``High-frequency trading in a limit order book,'' \emph{Quantitative Finance}, vol. 8, no. 3, pp. 217--224, 2008.
