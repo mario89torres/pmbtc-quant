@@ -1231,27 +1231,6 @@ setInterval(async () => {
     console.error('ciclo de refresco falló:', e);
   }
 }, 5000);
-</script>e)}">${t.edge == null ? '—' : signed(100 * t.edge, 1)}</td>
-      <td>${num(t.upDepth || 0)}</td></tr>`).join('');
-}
-
-function openHelpModal() {
-  $('#helpModal').classList.add('open');
-}
-function closeHelpModal(e) {
-  if (e && e.target !== e.currentTarget && !e.target.classList.contains('modal-close')) return;
-  $('#helpModal').classList.remove('open');
-}
-
-loadSummary();
-setInterval(async () => {
-  try {
-    await loadSummary();
-    if (selected && state) await select(selected);
-  } catch (e) {
-    console.error('ciclo de refresco falló:', e);
-  }
-}, 5000);
 </script>
 
 <!-- Modal de Guía de Señales del Bot -->
