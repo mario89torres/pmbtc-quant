@@ -30,14 +30,14 @@ El pipeline combina cálculo estocástico en tiempo continuo, aprendizaje autom�
 
 ```mermaid
 graph TD
-    A[Feed WebSocket Binance Spot BTC/USD] -->|Milisegundos| D[Ensamble Híbrido XGBoost + GBM]
-    B[Oráculo Chainlink BTC/USD] -->|Resolución 15m| D
-    C[Libro de Órdenes Polymarket CLOB] -->|Spread Bid/Ask| D
-    D -->|Platt Scaling Calibration| E[Probabilidad Calibrada P_Ensemble]
-    E --> F[Filtro de Riesgo Kelly Fraccionado f*]
-    E --> G[Motor Autónomo Market Maker (Maker Player)]
-    F -->|Señal Direccional Taker| H[Ejecución Órdenes Market]
-    G -->|Cotización Límite con Sesgo| I[Libro de Órdenes Limit Bid/Ask]
+    A["Feed WebSocket Binance Spot BTC/USD"] -->|Milisegundos| D["Ensamble Híbrido XGBoost + GBM"]
+    B["Oráculo Chainlink BTC/USD"] -->|Resolución 15m| D
+    C["Libro de Órdenes Polymarket CLOB"] -->|Spread Bid/Ask| D
+    D -->|Platt Scaling Calibration| E["Probabilidad Calibrada P_Ensemble"]
+    E --> F["Filtro de Riesgo Kelly Fraccionado f*"]
+    E --> G["Motor Autónomo Market Maker (Maker Player)"]
+    F -->|Señal Direccional Taker| H["Ejecución Órdenes Market"]
+    G -->|Cotización Límite con Sesgo| I["Libro de Órdenes Limit Bid/Ask"]
 ```
 
 ---
