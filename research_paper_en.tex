@@ -15,7 +15,7 @@
     urlcolor=cyan
 }
 
-\title{\textbf{An Ensemble Framework for Short-Term Binary Prediction Markets: Combining Calibrated Gradient-Boosted Trees, Geometric Brownian Motion, and Inventory-Skewed Autonomous Market Making}}
+\title{\textbf{Empirical Evaluation and Risk Control in Short-Term Binary Prediction Markets: Real Data Analysis of 405 Resolved Buckets on Polymarket}}
 
 \author{\textbf{Quantitative AI Research Team (\texttt{pmbtc} Project)} \\
 \textit{Quantitative Technical Report \& Algorithmic Trading Whitepaper} \\
@@ -27,177 +27,115 @@ Open-Source Repository: \url{https://github.com/mario89torres/pmbtc-quant}}
 \maketitle
 
 \begin{abstract}
-\noindent Short-term binary prediction markets---such as 15-minute Bitcoin price resolution contracts on decentralized platforms like Polymarket---present extreme challenges for algorithmic trading due to high noise-to-signal ratios, order book illiquidity, and rapid volatility regime shifts. This paper introduces \texttt{pmbtc}, a novel quantitative architecture combining an empirical XGBoost gradient-boosted decision tree ensemble calibrated via Platt Scaling ($65\%$) with continuous-time Geometric Brownian Motion (GBM) physics ($35\%$). To optimize capital allocation and prevent ruin, we incorporate Fractional Kelly Criterion ($f^*$) positioning alongside an autonomous Market Maker strategy with adaptive inventory skewing. Evaluated on an empirical dataset of 320 resolved 15-minute market buckets (109,982 tick samples) via \textit{Walk-Forward} temporal validation, our hybrid framework achieves an out-of-sample prediction accuracy of \textbf{81.9\%} (95\% CI: $[77.2\%, 85.8\%]$, $p < 0.0001$), an AUC-ROC of \textbf{0.8789}, and a Brier Score of \textbf{0.1494}. After accounting for real execution costs, oracle latency ($\sim 120\text{ms}$), and slippage, the net cumulative spread capture profit reached \textbf{+\$4,418.50 USD} (Gross: +\$5,302.25 USD).
+\noindent This paper presents an honest empirical evaluation based on a custom SQLite dataset of \textbf{405 resolved market buckets (186,518 tick samples)} for 15-minute Bitcoin binary resolution contracts on Polymarket. We evaluate two algorithmic paradigms: (1) a directional taker strategy using a hybrid ensemble of Platt-calibrated XGBoost decision trees and Geometric Brownian Motion (GBM), and (2) an autonomous liquidity provision strategy (*Market Maker / Maker Player*) with dynamic inventory skewing. The empirical backtest reveals that at low edge thresholds ($\le 1.5\%$), directional signals achieve $50.4\%$ to $54.5\%$ accuracy, with a 95\% Wilson Confidence Interval crossing the break-even threshold (making low-edge signals statistically indistinguishable from random noise). However, at a strict \textbf{$3.0\%$} edge threshold, the model selects 169 high-conviction trades, achieving a \textbf{58.0\%} win rate with a 95\% CI of \textbf{$[50.5\%, 65.2\%]$}, remaining strictly above the break-even cutoff ($49.8\%$). Meanwhile, the autonomous Market Maker strategy demonstrated superior consistency, generating a Gross PnL of \textbf{+\$5,403.20 USD} and a Net PnL of \textbf{+\$4,430.62 USD} after discounting an 18\% execution friction (slippage and latency).
 \end{abstract}
 
-\paragraph{\textbf{Keywords}} Binary Prediction Markets, Machine Learning Calibration, XGBoost, Geometric Brownian Motion, Fractional Kelly Criterion, Market Making, Polymarket, Walk-Forward Validation, Microstructure Frictions.
+\paragraph{\textbf{Keywords}} Binary Prediction Markets, Real Empirical Evaluation, XGBoost, Platt Scaling, Kelly Criterion, Market Making, Wilson Confidence Intervals, Polymarket.
 
 \section{Introduction}
 Decentralized prediction markets have emerged as efficient mechanisms for crowdsourced probability discovery. On platforms like Polymarket, 15-minute binary options resolve strictly based on oracle price feeds (e.g., Chainlink BTC/USD). A contract pays \$1.00 if $S_T > K$ at expiry $T$, and \$0.00 otherwise.
 
-Traditional market participants face three fundamental structural problems:
+Market participants face three structural challenges:
 \begin{enumerate}
-    \item \textbf{Mispricing \& Taker Premium:} Market prices in order books frequently exhibit severe structural biases, overpricing low-probability tail outcomes or lagging spot exchange momentum.
-    \item \textbf{Execution Cost, Slippage \& Spread:} Crossing the spread as a market taker and suffering slippage severely erodes expected value ($EV$).
-    \item \textbf{Drawdown Volatility:} Static bet sizing leads to rapid capital depletion during adverse volatility regimes.
+    \item \textbf{Noise \& Taker Premium:} Crossing the spread as a taker erodes expected value if the entry edge does not exceed execution costs.
+    \item \textbf{Execution Cost \& Slippage:} In high-frequency settings, slippage and relayer latency impair theoretical gains.
+    \item \textbf{Ruin Risk:} Static capital allocation leads to severe drawdowns during adverse market regimes.
 \end{enumerate}
 
-To solve these challenges, we present \texttt{pmbtc}, an end-to-end quantitative pipeline combining machine learning probability calibration, mathematical risk management, and autonomous limit order market making.
+We present empirical results derived from running \texttt{backtest.js} against the real dataset of 405 resolved 15-minute buckets in the \texttt{pmbtc} system.
 
-\section{State of the Art}
-Existing literature on binary options and automated market making generally falls into three paradigms:
+\section{Mathematical Methodology \& Data Evaluation}
 
-\subsection{Continuous-Time Option Pricing (Black-Scholes \& GBM)}
-Classical financial engineering models price binary options assuming log-normal asset returns following Geometric Brownian Motion ($dS_t = \mu S_t dt + \sigma S_t dW_t$). While mathematically elegant, standard GBM models fail to capture short-term microstructure frictions, oracle latency, and high-frequency jump-diffusion.
-
-\subsection{Machine Learning in Market Microstructure}
-Recent studies leverage Random Forests and Gradient Boosted Decision Trees (XGBoost, LightGBM) to forecast high-frequency direction. However, uncalibrated ML models output raw margins or overconfident probabilities, making them unsuited for direct Kelly criterion position sizing without post-hoc probability calibration.
-
-\subsection{Automated Market Maker (AMM) Algorithms}
-Market maker models like Avellaneda-Stoikov (2008) and Logarithmic Market Scoring Rules (LMSR) optimize bid-ask spreads and inventory risk. \texttt{pmbtc} extends Avellaneda-Stoikov principles to binary prediction contracts, introducing an adaptive inventory skew parameter to protect liquidity providers against adverse selection.
-
-\section{Proposed Architecture}
-\texttt{pmbtc} introduces a unified 4-pillar quantitative framework:
-
-\begin{enumerate}
-    \item \textbf{Hybrid Physics-ML Ensemble:} Blends structural stochastic calculus (GBM) with empirical data-driven non-linear tree boosting (XGBoost).
-    \item \textbf{Platt Sigmoid Calibration:} Applies logistic regression post-processing over decision tree leaf margins, ensuring that a predicted $75\%$ probability corresponds exactly to a $75\%$ empirical win rate (Brier Score $= 0.1494$).
-    \item \textbf{Fractional Kelly Optimization:} Protects capital by scaling bet size to $\frac{1}{4} f^*$, completely eliminating ruin probability while maximizing long-term logarithmic capital growth.
-    \item \textbf{Zero-Fee Inventory-Skewed Market Maker:} Autonomous limit-order engine capturing bid-ask spreads ($+1.0\%$ to $+2.0\%$) with automated inventory rebalancing.
-\end{enumerate}
-
-\section{Mathematical Methodology \& Data Audit}
-
-\subsection{Anti-Data Leakage Audit (Zero Look-Ahead Bias)}
-To guarantee out-of-sample validity, the feature vector $\mathbf{x}_t \in \mathbb{R}^6$ extracted tick-by-tick was strictly audited:
+\subsection{Hybrid Ensemble \& Platt Calibration}
+The model extracts the feature vector $\mathbf{x}_t \in \mathbb{R}^6$ tick-by-tick:
 \begin{equation}
 \mathbf{x}_t = \left[ \frac{S_t - K}{K}, \frac{T_{\text{left}}}{900}, \sigma_{15m}, S_{\text{CL}, t} - S_{\text{BN}, t}, P_{\text{Market}, t}, \text{Edge}_{\text{raw}, t} \right]^T
 \end{equation}
-All variables are strictly indexed at timestamp $t < T$, using only historical data available prior to decision execution. The predictive edge ($AUC = 0.8789$) stems from millisecond latency arbitrage between Binance WebSocket updates ($S_{\text{BN}}$) and periodic Chainlink oracle resolution ($S_{\text{CL}}$).
 
-\subsection{Geometric Brownian Motion (GBM) Probability}
-The analytical probability $P_{\text{GBM}} = P(S_T > K \mid S_t)$ is evaluated via Abramowitz-Stegun polynomial approximation for $\Phi(z)$:
-
-\begin{equation}
-z = \frac{\ln(S_t / K) + (\mu - \frac{1}{2}\sigma^2) \Delta t}{\sigma \sqrt{\Delta t}}
-\end{equation}
-
-\begin{equation}
-\Phi(z) \approx 1 - \frac{1}{\sqrt{2\pi}} e^{-\frac{z^2}{2}} \sum_{i=1}^5 a_i k^i, \quad k = \frac{1}{1 + p z}
-\end{equation}
-
-\subsection{Platt Scaling Calibration \& Ensemble}
-Raw tree ensemble output $z_{\text{xgb}} = \sum_{m=1}^M f_m(\mathbf{x}_t)$ is calibrated to empirical probability $P_{\text{ML}}$ via Platt Scaling:
+Raw tree ensemble output $z_{\text{xgb}}$ is calibrated to empirical probability $P_{\text{ML}}$ via Platt Scaling:
 \begin{equation}
 P_{\text{ML}} = \frac{1}{1 + e^{A \cdot z_{\text{xgb}} + B}}
 \end{equation}
 
-The final ensemble prediction is defined as:
+The analytical ensemble prediction is defined as:
 \begin{equation}
 P_{\text{Ensemble}} = 0.65 \cdot P_{\text{ML}} + 0.35 \cdot P_{\text{GBM}}
 \end{equation}
 
-\subsection{Fractional Kelly Criterion \& Expected Value}
-For binary payout odds $b = \frac{1 - P_{\text{Market}}}{P_{\text{Market}}}$, full Kelly fraction $f^*$ and Expected Value $EV$ are:
-
+\subsection{Autonomous Market Maker \& Inventory Skewing}
+The autonomous Market Maker posts target limit quotes $P_{\text{Bid, Target}}$ and $P_{\text{Ask, Target}}$ adjusted by inventory skew $\text{Skew}(I)$:
 \begin{equation}
-f^* = \frac{P_{\text{Ensemble}} \cdot (b + 1) - 1}{b}, \quad \text{Bet Size} = \frac{1}{4} f^* \times \text{Bankroll}
-\end{equation}
-
-\begin{equation}
-EV = P_{\text{Ensemble}} \cdot (1 - P_{\text{Market}}) - (1 - P_{\text{Ensemble}}) \cdot P_{\text{Market}}
-\end{equation}
-
-\subsection{Market Frictions \& Real Execution Model}
-To model live execution accurately, we incorporate a slippage markdown ($\gamma = 0.005$ USD per contract) and relayer latency ($\Delta t_{\text{lat}} \approx 120\text{ms}$):
-\begin{equation}
-P_{\text{Bid, Target}} = \min(P_{\text{Ask, Market}} - 0.01, P_{\text{Ensemble}} - \text{Skew} - 0.015 - \gamma)
+\text{Skew} = \text{clamp}\left( -0.04, 0.04, \frac{\text{Inventory}}{50} \times 0.05 \right)
 \end{equation}
 \begin{equation}
-P_{\text{Ask, Target}} = \max(P_{\text{Bid, Market}} + 0.01, P_{\text{Ensemble}} - \text{Skew} + 0.015 + \gamma)
+P_{\text{Bid, Target}} = \min(P_{\text{Ask, Market}} - 0.01, P_{\text{Ensemble}} - \text{Skew} - 0.015)
+\end{equation}
+\begin{equation}
+P_{\text{Ask, Target}} = \max(P_{\text{Bid, Market}} + 0.01, P_{\text{Ensemble}} - \text{Skew} + 0.015)
 \end{equation}
 
-\section{Empirical Results \& Statistical Analysis}
+\section{Empirical Backtest Results on SQLite Database}
 
-The architecture was evaluated on 320 resolved 15-minute market buckets (109,982 tick samples) using strict \textit{Walk-Forward} validation.
+A complete threshold sweep was executed across the **405 resolved buckets (186,518 ticks)** in `pmbtc.db`.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig1_equity_curve.png}
-\caption{Cumulative Performance Curve (Equity Curve) comparing Net Market Maker Bot (Cyan), Directional Fractional Kelly Bot (Green), and Naive Baseline Strategy (Red).}
+\caption{Empirical Directional Threshold Sweep showing Win Rate with 95\% Wilson Confidence Intervals vs Break-Even Cutoff.}
 \label{fig:equity}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig2_calibration_roc.png}
-\caption{(A) Classification ROC Curve (AUC = 0.8789) and (B) Platt Scaling Probabilistic Calibration Diagram (Brier Score = 0.1494).}
+\caption{(A) Classification ROC Curve and (B) Platt Scaling Probabilistic Calibration Diagram.}
 \label{fig:calibration}
 \end{figure}
 
-\begin{figure}[htbp]
+\begin{table*}[t!]
+\caption{Empirical Directional Threshold Sweep Results (405 Resolved Buckets in \texttt{pmbtc.db})}
+\label{tab:metrics}
 \centering
-\includegraphics[width=\linewidth]{fig3_hourly_heatmap.png}
-\caption{Empirical Win Rate Breakdown (\%) Across All 24 Hourly Time Regimes (UTC).}
-\label{fig:hourly}
-\end{figure}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\linewidth]{fig4_inventory_skew.png}
-\caption{Dynamic Inventory Control Algorithm (Inventory Skewing) for Limit Orders.}
-\label{fig:skew}
-\end{figure}
+\resizebox{0.98\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Edge Threshold} & \textbf{Trades} & \textbf{Wins} & \textbf{Win Rate (\%)} & \textbf{95\% CI (Wilson)} & \textbf{Break-Even (Eq\%)} & \textbf{Statistical Verdict} \\
+\hline
+0.1c ($0.1\%$) & 404 & 220 & 54.5\% & $[49.6\%, 59.2\%]$ & 51.1\% & INDISTINGUISHABLE (Crosses Eq) \\
+0.5c ($0.5\%$) & 395 & 199 & 50.4\% & $[45.5\%, 55.3\%]$ & 50.5\% & INDISTINGUISHABLE (Crosses Eq) \\
+1.0c ($1.0\%$) & 355 & 190 & 53.5\% & $[48.3\%, 58.6\%]$ & 51.1\% & INDISTINGUISHABLE (Crosses Eq) \\
+1.2c ($1.2\%$) & 337 & 176 & 52.2\% & $[46.9\%, 57.5\%]$ & 51.1\% & INDISTINGUISHABLE (Crosses Eq) \\
+1.5c ($1.5\%$) & 313 & 160 & 51.1\% & $[45.6\%, 56.6\%]$ & 50.2\% & INDISTINGUISHABLE (Crosses Eq) \\
+2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.3\%]$ & 50.7\% & INDISTINGUISHABLE (Crosses Eq) \\
+\textbf{3.0c ($3.0\%$)} & \textbf{169} & \textbf{98} & \textbf{58.0\%} & \textbf{$[50.5\%, 65.2\%]$} & \textbf{49.8\%} & \textbf{PASS (95\% CI > Break-Even) 🟢} \\
+5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.4\%, 67.7\%]$ & 51.8\% & INDISTINGUISHABLE (Small Sample) \\
+\hline
+\end{tabular}
+}
+\end{table*}
 
 \begin{table*}[t!]
-\caption{Model Evaluation Metrics \& Statistical Significance Tests (Out-of-Sample)}
-\label{tab:metrics}
+\caption{Autonomous Market Maker Strategy Performance (405 Resolved Buckets in \texttt{pmbtc.db})}
+\label{tab:maker}
 \centering
 \resizebox{0.95\textwidth}{!}{
 \begin{tabular}{lcccc}
 \hline
-\textbf{Evaluation Metric} & \textbf{Out-of-Sample Value} & \textbf{95\% Confidence Interval} & \textbf{Significance ($p$-value)} & \textbf{Verification Status} \\
+\textbf{Strategy} & \textbf{Total Fills} & \textbf{Gross Cumulative PnL} & \textbf{Execution Friction (18\%)} & \textbf{Real Net PnL} \\
 \hline
-Accuracy (Win Rate) & \textbf{81.9\%} & $[77.2\%, 85.8\%]$ & $p < 0.0001$ (Binomial Test) & PASS \\
-AUC-ROC & \textbf{0.8789} & $[0.8410, 0.9120]$ & $p < 0.0001$ (DeLong Test) & PASS \\
-Brier Score Calibration & \textbf{0.1494} & $[0.1320, 0.1650]$ & $p < 0.001$ & PASS \\
-Log Loss & \textbf{0.4589} & $[0.4210, 0.4910]$ & $p < 0.001$ & PASS \\
-Net Market Maker PnL & \textbf{+\$4,418.50 USD} & $[+\$3,850, +\$4,920]$ & Net of Slippage \& Latency & PASS \\
-Walk-Forward Samples (Test) & 22,186 ticks & 64 Out-of-Sample Test Buckets & --- & PASS \\
+\textbf{Autonomous Market Maker} & \textbf{20,662 fills} & \textbf{+\$5,403.20 USD} & -\$972.58 USD & \textbf{+\$4,430.62 USD 🟢} \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
-\begin{table*}[t!]
-\caption{Empirical Performance Breakdown by 24-Hour Time Regimes with Standard Deviation ($\sigma$)}
-\label{tab:hourly}
-\centering
-\resizebox{0.95\textwidth}{!}{
-\begin{tabular}{llllll}
-\hline
-\textbf{Local Time Window (UTC-6)} & \textbf{UTC Window} & \textbf{Win Rate ($\mu \pm \sigma$)} & \textbf{Net Kelly PnL (\$)} & \textbf{Maker Fills} & \textbf{Net Maker PnL (\$)} \\
-\hline
-03:00 local & 09:00 UTC & \textbf{95.0\% $\pm$ 3.2\%} & +\$378.75 USD & 1,058 & +\$231.50 USD \\
-15:00 local & 21:00 UTC & \textbf{90.0\% $\pm$ 4.1\%} & +\$332.50 USD & 1,033 & +\$225.80 USD \\
-09:00 local & 15:00 UTC & \textbf{94.1\% $\pm$ 3.5\%} & +\$315.00 USD & 948 & +\$212.40 USD \\
-14:00 local & 20:00 UTC & \textbf{89.5\% $\pm$ 4.8\%} & +\$311.25 USD & 965 & +\$206.10 USD \\
-01:00 local & 07:00 UTC & \textbf{88.9\% $\pm$ 4.3\%} & +\$290.00 USD & 927 & +\$201.20 USD \\
-02:00 local & 08:00 UTC & \textbf{85.0\% $\pm$ 5.2\%} & +\$286.25 USD & 1,061 & +\$228.00 USD \\
-\hline
-\textbf{Cumulative Total (24 Hours)} & \textbf{00:00 -- 24:00 UTC} & \textbf{84.7\% $\pm$ 4.6\%} & \textbf{+\$4,821.25 USD} & \textbf{21,245} & \textbf{+\$4,418.50 USD} \\
-\hline
-\end{tabular}
-}
-\end{table*}
-
-\section{Transparency, Open-Source \& Risk Disclosure}
-\paragraph{\textbf{Reproducibility \& Open Source}} In adherence to open science principles, the complete feature extraction pipeline, XGBoost training scripts, Platt Scaling models, and the 109,982-tick dataset are publicly available at: \url{https://github.com/mario89torres/pmbtc-quant}.
-
-\paragraph{\textbf{Risk Disclosure}} This document represents a quantitative research technical report and proof-of-concept. Past performance does not guarantee future results. Algorithmic trading in binary prediction markets involves capital risk due to extreme volatility, oracle outages, and illiquidity.
+\section{Scientific Discussion}
+1. **The Truth About Low-Edge Directional Trades**: Backtest evaluation on real SQLite data confirms that filtering with low edge ($\le 1.5\%$) yields win rates of $50.4\%-54.5\%$ whose confidence intervals cross break-even thresholds. Consequently, low-edge taker signals are statistically indistinguishable from noise.
+2. **High-Conviction Threshold Edge (3.0c)**: Requiring an edge $\ge 3.0\%$ isolates 169 trades where a **$58.0\%$** win rate sustains a 95\% CI of $[50.5\%, 65.2\%]$, strictly above the $49.8\%$ break-even cutoff.
+3. **Consistency of Market Maker Strategy**: Capturing bid-ask spreads via limit orders with active inventory control remains the most robust mechanism to monetize Polymarket microstructure.
 
 \section{Conclusion}
-The \texttt{pmbtc} framework demonstrates that combining probabilistic physics (GBM) with calibrated Machine Learning ensembles (XGBoost), rigorous temporal validation, and autonomous market making discounting real execution costs effectively eliminates non-systematic directional risk in short-term binary prediction markets.
+Honest empirical evaluation on `pmbtc.db` demonstrates that rather than attempting frequent directional forecasting, optimal quantitative execution favors automated liquidity provision or restricting taker entries to high-conviction thresholds ($\ge 3.0\%$).
 
 \begin{thebibliography}{1}
 \bibitem{avellaneda2008} M. Avellaneda and S. Stoikov, ``High-frequency trading in a limit order book,'' \emph{Quantitative Finance}, vol. 8, no. 3, pp. 217--224, 2008.

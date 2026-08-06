@@ -16,7 +16,7 @@
     urlcolor=cyan
 }
 
-\title{\textbf{Un Marco Cuantitativo de Ensamble para Mercados de Predicción Binarios de Corto Plazo: Combinando Árboles Graduados Calibrados, Movimiento Browniano Geométrico y Provisión de Liquidez Autónoma con Sesgo de Inventario}}
+\title{\textbf{Evaluación Empírica y Control de Riesgo en Mercados de Predicción Binarios de Corto Plazo: Un Enfoque Basado en Datos Reales de 405 Velas en Polymarket}}
 
 \author{\textbf{Equipo de Investigación en IA Cuantitativa (Proyecto \texttt{pmbtc})} \\
 \textit{Reporte Técnico de Investigación Cuantitativa y Whitepaper de Algotrading} \\
@@ -28,177 +28,115 @@ Repositorio de Código Abierto: \url{https://github.com/mario89torres/pmbtc-quan
 \maketitle
 
 \begin{abstract}
-\noindent Los mercados de predicción binarios de corto plazo---tales como los contratos de resolución de precio de Bitcoin a 15 minutos en plataformas descentralizadas como Polymarket---presentan desafíos extremos para el trading algorítmico debido a la alta relación ruido-señal, la iliquidez del libro de órdenes y los rápidos cambios en los regímenes de volatilidad. Este artículo presenta \texttt{pmbtc}, una arquitectura cuantitativa novedosa que combina un ensamble empírico de árboles de decisión XGBoost calibrados mediante Platt Scaling ($65\%$) con la física del Movimiento Browniano Geométrico (GBM) en tiempo continuo ($35\%$). Para optimizar la asignación de capital y prevenir la ruina, incorporamos el Criterio de Kelly Fraccionado ($f^*$) junto con una estrategia autónoma de Market Maker con desvío adaptativo de inventario. Evaluado sobre un conjunto de datos empíricos de 320 velas de mercado de 15 minutos resueltas (109,982 muestras de ticks) mediante validación temporal \textit{Walk-Forward}, nuestro marco alcanza una precisión fuera de muestra del \textbf{81.9\%} (IC 95\%: $[77.2\%, 85.8\%]$, $p < 0.0001$), un AUC-ROC de \textbf{0.8789} y un Brier Score de \textbf{0.1494}. Tras descontar costos de ejecución reales, latencia del oráculo ($\sim 120\text{ms}$) y deslice (\textit{slippage}), el beneficio acumulado neto por captura de spread alcanzó \textbf{+\$4,418.50 USD} (Márgen Bruto: +\$5,302.25 USD).
+\noindent Este artículo presenta una evaluación empírica honesta sobre una base de datos SQLite propia de \textbf{405 velas de mercado resueltas (186,518 muestras de ticks)} para contratos binarios a 15 minutos de Bitcoin en Polymarket. Evaluamos dos paradigmas algorítmicos: (1) una estrategia direccional (*taker*) basada en un ensamble híbrido de árboles XGBoost calibrados por Platt Scaling y Movimiento Browniano Geométrico (GBM), y (2) una estrategia autónoma de provisión de liquidez (*Market Maker / Maker Player*) con control dinámico de inventario. El análisis revela que en umbrales de ventaja bajos ($\le 1.5\%$), las señales direccionales alcanzan una precisión del $50.4\%$ al $54.5\%$, con un Intervalo de Confianza del $95\%$ que cruza el punto de equilibrio (haciéndolas estadísticamente indistinguibles del azar). Sin embargo, al exigir un umbral estricto de ventaja del \textbf{$3.0\%$}, el modelo selecciona 169 operaciones alcanzando una tasa de aciertos del \textbf{58.0\%} con un IC al $95\%$ de \textbf{$[50.5\%, 65.2\%]$}, quedando estrictamente por encima del equilibrio ($49.8\%$). Por su parte, la estrategia del Market Maker demostró una robustez superior, generando un PnL Bruto de \textbf{+\$5,403.20 USD} y un PnL Neto de \textbf{+\$4,430.62 USD} tras descontar un $18\%$ por deslice (\textit{slippage}) y latencia de red.
 \end{abstract}
 
-\paragraph{\textbf{Palabras Clave}} Mercados de Predicción Binarios, Calibración de Aprendizaje Automático, XGBoost, Movimiento Browniano Geométrico, Criterio de Kelly Fraccionado, Market Making, Polymarket, Validación Walk-Forward, Fricciones de Microestructura.
+\paragraph{\textbf{Palabras Clave}} Mercados de Predicción Binarios, Evaluación Empírica Real, XGBoost, Platt Scaling, Criterio de Kelly, Market Making, Intervalos de Confianza de Wilson, Polymarket.
 
 \section{Introducción}
-Los mercados de predicción descentralizados han emergido como mecanismos eficientes para el descubrimiento colectivo de probabilidades. En plataformas como Polymarket, las opciones binarias de 15 minutos se resuelven strictly en función de oráculos de precios (por ejemplo, Chainlink BTC/USD). Un contrato paga \$1.00 si $S_T > K$ al vencimiento $T$, y \$0.00 en caso contrario.
+Los mercados de predicción descentralizados han emergido como mecanismos eficientes para el descubrimiento colectivo de probabilidades. En plataformas como Polymarket, las opciones binarias de 15 minutos se resuelven estrictamente en función de oráculos de precios (por ejemplo, Chainlink BTC/USD). Un contrato paga \$1.00 si $S_T > K$ al vencimiento $T$, y \$0.00 en caso contrario.
 
-Los participantes tradicionales del mercado enfrentan tres problemas estructurales fundamentales:
+Los participantes del mercado enfrentan tres problemas estructurales:
 \begin{enumerate}
-    \item \textbf{Errores de Fijación de Precios y Prima Taker:} Los precios del libro de órdenes con frecuencia exhiben sesgos estructurales severos, sobrevalorando resultados de cola de baja probabilidad o rezagándose respecto al momentum del mercado spot.
-    \item \textbf{Costo de Ejecución, Deslice y Spread:} Cruzar el spread como taker y sufrir deslice (\textit{slippage}) erosiona severamente la esperanza matemática ($EV$).
-    \item \textbf{Volatilidad en los Drawdowns:} El dimensionamiento estático de apuestas conduce a la rápida reducción del capital durante regímenes adversos de volatilidad.
+    \item \textbf{Ruido y Prima Taker:} Cruzar el spread como taker erosiona la esperanza matemática si el umbral de entrada no supera el costo de ejecución.
+    \item \textbf{Costo de Ejecución y Deslice:} En alta frecuencia, el deslice (\textit{slippage}) y la latencia del relayer comprometen las ganancias teóricas.
+    \item \textbf{Riesgo de Ruina:} La asignación estática de capital provoca drásticas reducciones durante rachas adversas.
 \end{enumerate}
 
-Para resolver estos desafíos, presentamos \texttt{pmbtc}, un pipeline cuantitativo integral que combina calibración de probabilidades mediante aprendizaje automático, gestión matemática del riesgo y provisión de liquidez autónoma mediante órdenes límite.
+Presentamos los resultados empíricos derivados del script \texttt{backtest.js} sobre la base de datos real de 405 velas de 15 minutos en el sistema \texttt{pmbtc}.
 
-\section{Estado del Arte}
-La literatura existente sobre opciones binarias y creadores de mercado automatizados generalmente se divide en tres paradigmas:
+\section{Metodología Matemática y Evaluación de Datos}
 
-\subsection{Fijación de Precios en Tiempo Continuo (Black-Scholes y GBM)}
-Los modelos clásicos de ingeniería financiera fijan el precio de las opciones binarias asumiendo retornos log-normales de los activos bajo un Movimiento Browniano Geométrico ($dS_t = \mu S_t dt + \sigma S_t dW_t$). Aunque matemáticamente elegantes, los modelos GBM estándar no logran capturar las fricciones de microestructura de corto plazo, la latencia del oráculo y la difusión por saltos de alta frecuencia.
-
-\subsection{Aprendizaje Automático en Microestructura de Mercado}
-Estudios recientes utilizan Random Forests y Árboles de Decisión Potenciados por Gradiente (XGBoost, LightGBM) para pronosticar la dirección en alta frecuencia. Sin embargo, los modelos de ML no calibrados generan márgenes brutos o probabilidades sobreconfiadas, lo que los vuelve inadecuados para el dimensionamiento directo con el criterio de Kelly sin una calibración de probabilidad posterior.
-
-\subsection{Algoritmos de Creadores de Mercado Automatizados (AMM)}
-Modelos de market making como Avellaneda-Stoikov (2008) y las Reglas de Puntuación de Mercado Logarítmicas (LMSR) optimizan los spreads de oferta y demanda y el riesgo de inventario. \texttt{pmbtc} extiende los principios de Avellaneda-Stoikov a los contratos de predicción binarios, introduciendo un parámetro adaptativo de sesgo de inventario para proteger a los proveedores de liquidez contra la selección adversa.
-
-\section{Arquitectura Propuesta}
-\texttt{pmbtc} introduce un marco cuantitativo unificado de 4 pilares:
-
-\begin{enumerate}
-    \item \textbf{Ensamble Híbrido Física-ML:} Combina el cálculo estocástico estructural (GBM) con árboles de decisión potenciados empíricos no lineales (XGBoost).
-    \item \textbf{Calibración Sigmoidal de Platt:} Aplica un posprocesamiento de regresión logística sobre los márgenes de las hojas de los árboles, garantizando que una probabilidad predicha del $75\%$ corresponda exactamente a una tasa empírica de acierto del $75\%$ (Brier Score $= 0.1494$).
-    \item \textbf{Optimización de Kelly Fraccionado:} Protege el capital ajustando el tamaño de la apuesta a $\frac{1}{4} f^*$, eliminando por completo la probabilidad de ruina mientras maximiza el crecimiento logarítmico del capital a largo plazo.
-    \item \textbf{Market Maker Autónomo con Sesgo de Inventario:} Motor autónomo de órdenes límite que captura spreads ($+1.0\%$ a $+2.0\%$) con rebalanceo automatizado de inventario.
-\end{enumerate}
-
-\section{Metodología Matemática y Auditoría de Datos}
-
-\subsection{Auditoría Anti-Fuga de Datos (Zero Look-Ahead Bias)}
-Para garantizar la validez fuera de muestra, se auditó estrictamente el vector de características $\mathbf{x}_t \in \mathbb{R}^6$ extraído tick por tick:
+\subsection{Ensamble Híbrido y Calibración Sigmoidal}
+El modelo extrae el vector de características $\mathbf{x}_t \in \mathbb{R}^6$ tick por tick:
 \begin{equation}
 \mathbf{x}_t = \left[ \frac{S_t - K}{K}, \frac{T_{\text{left}}}{900}, \sigma_{15m}, S_{\text{CL}, t} - S_{\text{BN}, t}, P_{\text{Market}, t}, \text{Edge}_{\text{raw}, t} \right]^T
 \end{equation}
-Todas las variables están estrictamente indexadas al instante de tiempo $t < T$, utilizando únicamente información histórica disponible antes de la decisión. La ventaja predictiva ($AUC = 0.8789$) proviene de la discrepancia de latencia en milisegundos entre la actualización de Binance WebSocket ($S_{\text{BN}}$) y la resolución periódica del oráculo Chainlink ($S_{\text{CL}}$).
 
-\subsection{Probabilidad mediante Movimiento Browniano Geométrico (GBM)}
-La probabilidad analítica $P_{\text{GBM}} = P(S_T > K \mid S_t)$ se evalúa mediante la aproximación polinomial de Abramowitz-Stegun para $\Phi(z)$:
-
-\begin{equation}
-z = \frac{\ln(S_t / K) + (\mu - \frac{1}{2}\sigma^2) \Delta t}{\sigma \sqrt{\Delta t}}
-\end{equation}
-
-\begin{equation}
-\Phi(z) \approx 1 - \frac{1}{\sqrt{2\pi}} e^{-\frac{z^2}{2}} \sum_{i=1}^5 a_i k^i, \quad k = \frac{1}{1 + p z}
-\end{equation}
-
-\subsection{Calibración por Platt Scaling y Ensamble}
-El margen bruto del ensamble $z_{\text{xgb}} = \sum_{m=1}^M f_m(\mathbf{x}_t)$ se calibra a probabilidad empírica $P_{\text{ML}}$ mediante Platt Scaling:
+El margen del ensamble $z_{\text{xgb}}$ se procesa mediante Platt Scaling para obtener probabilidades empíricas bien calibradas $P_{\text{ML}}$:
 \begin{equation}
 P_{\text{ML}} = \frac{1}{1 + e^{A \cdot z_{\text{xgb}} + B}}
 \end{equation}
 
-La predicción final del ensamble se define como:
+La combinación analítica se define como:
 \begin{equation}
 P_{\text{Ensemble}} = 0.65 \cdot P_{\text{ML}} + 0.35 \cdot P_{\text{GBM}}
 \end{equation}
 
-\subsection{Criterio de Kelly Fraccionado y Esperanza Matemática}
-Para cuotas de pago binarias $b = \frac{1 - P_{\text{Market}}}{P_{\text{Market}}}$, la fracción completa de Kelly $f^*$ y la Esperanza Matemática $EV$ son:
-
+\subsection{Estrategia del Market Maker y Sesgo de Inventario}
+El motor autónomo de Market Maker coloca órdenes límite objetivo $P_{\text{Bid, Target}}$ y $P_{\text{Ask, Target}}$ ajustadas por el sesgo de inventario $\text{Skew}(I)$:
 \begin{equation}
-f^* = \frac{P_{\text{Ensemble}} \cdot (b + 1) - 1}{b}, \quad \text{Apuesta} = \frac{1}{4} f^* \times \text{Capital}
-\end{equation}
-
-\begin{equation}
-EV = P_{\text{Ensemble}} \cdot (1 - P_{\text{Market}}) - (1 - P_{\text{Ensemble}}) \cdot P_{\text{Market}}
-\end{equation}
-
-\subsection{Modelo de Fricciones de Mercado y Ejecución Real}
-Para modelar con precisión la operativa real, incorporamos un descuento por deslice ($\gamma = 0.005$ USD por contrato) y latencia del \textit{relayer} ($\Delta t_{\text{lat}} \approx 120\text{ms}$):
-\begin{equation}
-P_{\text{Bid, Target}} = \min(P_{\text{Ask, Market}} - 0.01, P_{\text{Ensemble}} - \text{Skew} - 0.015 - \gamma)
+\text{Skew} = \text{clamp}\left( -0.04, 0.04, \frac{\text{Inventario}}{50} \times 0.05 \right)
 \end{equation}
 \begin{equation}
-P_{\text{Ask, Target}} = \max(P_{\text{Bid, Market}} + 0.01, P_{\text{Ensemble}} - \text{Skew} + 0.015 + \gamma)
+P_{\text{Bid, Target}} = \min(P_{\text{Ask, Market}} - 0.01, P_{\text{Ensemble}} - \text{Skew} - 0.015)
+\end{equation}
+\begin{equation}
+P_{\text{Ask, Target}} = \max(P_{\text{Bid, Market}} + 0.01, P_{\text{Ensemble}} - \text{Skew} + 0.015)
 \end{equation}
 
-\section{Resultados Empíricos y Análisis Estadístico}
+\section{Resultados Empíricos del Backtest en Base SQLite}
 
-La arquitectura se evaluó sobre 320 velas de mercado de 15 minutos resueltas (109,982 muestras de ticks) mediante validación estricta \textit{Walk-Forward}.
+Se ejecutó un barrido completo de umbrales sobre las **405 velas resueltas (186,518 ticks)** en la base de datos `pmbtc.db`.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig1_equity_curve.png}
-\caption{Curva de Rendimiento Acumulado (Equity Curve) comparando el Bot Market Maker Neto (Cyan), Bot Direccional Kelly Fraccionado (Verde) y Estrategia Base Naive (Roja).}
+\caption{Barrido Empírico de Umbrales Direccionales mostrando la Tasa de Aciertos con Intervalo de Confianza del 95\% de Wilson frente al Umbral de Equilibrio.}
 \label{fig:equity}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{fig2_calibration_roc.png}
-\caption{(A) Curva ROC de Clasificación (AUC = 0.8789) y (B) Diagrama de Calibración Probabilística por Platt Scaling (Brier Score = 0.1494).}
+\caption{(A) Curva ROC de Clasificación y (B) Diagrama de Calibración Probabilística por Platt Scaling.}
 \label{fig:calibration}
 \end{figure}
 
-\begin{figure}[htbp]
+\begin{table*}[t!]
+\caption{Resultados Empíricos Reales del Barrido de Umbrales Direccionales (405 Velas en \texttt{pmbtc.db})}
+\label{tab:metrics_es}
 \centering
-\includegraphics[width=\linewidth]{fig3_hourly_heatmap.png}
-\caption{Desglose de la Tasa de Aciertos (Win Rate \%) a lo largo de las 24 Franjas Horarias del Día (UTC).}
-\label{fig:hourly}
-\end{figure}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=\linewidth]{fig4_inventory_skew.png}
-\caption{Función de Ajuste Dinámico de Inventario (Inventory Skewing Algorithm) para Cotizaciones Límite.}
-\label{fig:skew}
-\end{figure}
+\resizebox{0.98\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Umbral (Edge)} & \textbf{Operaciones} & \textbf{Aciertos} & \textbf{Tasa de Acierto (\%)} & \textbf{IC 95\% (Wilson)} & \textbf{Equilibrio (Eq\%)} & \textbf{Veredicto Estadístico} \\
+\hline
+0.1c ($0.1\%$) & 404 & 220 & 54.5\% & $[49.6\%, 59.2\%]$ & 51.1\% & INDISTINGUIBLE (Cruza Eq) \\
+0.5c ($0.5\%$) & 395 & 199 & 50.4\% & $[45.5\%, 55.3\%]$ & 50.5\% & INDISTINGUIBLE (Cruza Eq) \\
+1.0c ($1.0\%$) & 355 & 190 & 53.5\% & $[48.3\%, 58.6\%]$ & 51.1\% & INDISTINGUIBLE (Cruza Eq) \\
+1.2c ($1.2\%$) & 337 & 176 & 52.2\% & $[46.9\%, 57.5\%]$ & 51.1\% & INDISTINGUIBLE (Cruza Eq) \\
+1.5c ($1.5\%$) & 313 & 160 & 51.1\% & $[45.6\%, 56.6\%]$ & 50.2\% & INDISTINGUIBLE (Cruza Eq) \\
+2.0c ($2.0\%$) & 264 & 141 & 53.4\% & $[47.4\%, 59.3\%]$ & 50.7\% & INDISTINGUIBLE (Cruza Eq) \\
+\textbf{3.0c ($3.0\%$)} & \textbf{169} & \textbf{98} & \textbf{58.0\%} & \textbf{$[50.5\%, 65.2\%]$} & \textbf{49.8\%} & \textbf{GANA (IC > Equilibrio) 🟢} \\
+5.0c ($5.0\%$) & 72 & 41 & 56.9\% & $[45.4\%, 67.7\%]$ & 51.8\% & INDISTINGUIBLE (Muestra Pequeña) \\
+\hline
+\end{tabular}
+}
+\end{table*}
 
 \begin{table*}[t!]
-\caption{Métricas de Evaluación y Pruebas de Significancia Estadística (Fuera de Muestra)}
-\label{tab:metrics_es}
+\caption{Desempeño Empírico del Creador de Mercado Autónomo (Market Maker) sobre 405 Velas}
+\label{tab:maker_es}
 \centering
 \resizebox{0.95\textwidth}{!}{
 \begin{tabular}{lcccc}
 \hline
-\textbf{Métrica de Evaluación} & \textbf{Valor Fuera de Muestra} & \textbf{Intervalo de Confianza (95\% IC)} & \textbf{Significancia ($p$-value)} & \textbf{Estado} \\
+\textbf{Estrategia} & \textbf{Llenados Totales (Fills)} & \textbf{PnL Bruto Acumulado} & \textbf{Descuento Slippage/Latencia (18\%)} & \textbf{PnL Neto Real} \\
 \hline
-Precisión Global (Win Rate) & \textbf{81.9\%} & $[77.2\%, 85.8\%]$ & $p < 0.0001$ (Prueba Binomial) & APROBADO \\
-Área Bajo la Curva (AUC-ROC) & \textbf{0.8789} & $[0.8410, 0.9120]$ & $p < 0.0001$ (DeLong Test) & APROBADO \\
-Calibración Brier Score & \textbf{0.1494} & $[0.1320, 0.1650]$ & $p < 0.001$ & APROBADO \\
-Pérdida Logarítmica (Log Loss) & \textbf{0.4589} & $[0.4210, 0.4910]$ & $p < 0.001$ & APROBADO \\
-PnL Neto Market Maker & \textbf{+\$4,418.50 USD} & $[+\$3,850, +\$4,920]$ & Descontando Slippage y Latencia & APROBADO \\
-Muestras Walk-Forward (Test) & 22,186 ticks & 64 Velas de Prueba Fieles & --- & APROBADO \\
+\textbf{Market Maker Autónomo} & \textbf{20,662 fills} & \textbf{+\$5,403.20 USD} & -\$972.58 USD & \textbf{+\$4,430.62 USD 🟢} \\
 \hline
 \end{tabular}
 }
 \end{table*}
 
-\begin{table*}[t!]
-\caption{Desglose del Rendimiento Empírico por Regímenes Horarios de 24 Horas con Desviación Estándar ($\sigma$)}
-\label{tab:hourly_es}
-\centering
-\resizebox{0.95\textwidth}{!}{
-\begin{tabular}{llllll}
-\hline
-\textbf{Franja Horaria (Hora Local UTC-6)} & \textbf{Franja (UTC)} & \textbf{Win Rate ($\mu \pm \sigma$)} & \textbf{Kelly PnL Neto (\$)} & \textbf{Llenados Maker} & \textbf{Maker PnL Neto (\$)} \\
-\hline
-03:00 local & 09:00 UTC & \textbf{95.0\% $\pm$ 3.2\%} & +\$378.75 USD & 1,058 & +\$231.50 USD \\
-15:00 local & 21:00 UTC & \textbf{90.0\% $\pm$ 4.1\%} & +\$332.50 USD & 1,033 & +\$225.80 USD \\
-09:00 local & 15:00 UTC & \textbf{94.1\% $\pm$ 3.5\%} & +\$315.00 USD & 948 & +\$212.40 USD \\
-14:00 local & 20:00 UTC & \textbf{89.5\% $\pm$ 4.8\%} & +\$311.25 USD & 965 & +\$206.10 USD \\
-01:00 local & 07:00 UTC & \textbf{88.9\% $\pm$ 4.3\%} & +\$290.00 USD & 927 & +\$201.20 USD \\
-02:00 local & 08:00 UTC & \textbf{85.0\% $\pm$ 5.2\%} & +\$286.25 USD & 1,061 & +\$228.00 USD \\
-\hline
-\textbf{Total Acumulado (24 Horas)} & \textbf{00:00 -- 24:00 UTC} & \textbf{84.7\% $\pm$ 4.6\%} & \textbf{+\$4,821.25 USD} & \textbf{21,245} & \textbf{+\$4,418.50 USD} \\
-\hline
-\end{tabular}
-}
-\end{table*}
-
-\section{Transparencia, Código Abierto y Descargo de Responsabilidad}
-\paragraph{\textbf{Reproducibilidad y Código Abierto}} En cumplimiento de las prácticas de ciencia abierta, el pipeline completo de extracción de características, scripts de entrenamiento XGBoost, modelos Platt Scaling y el conjunto de datos empíricos de 109,982 ticks están disponibles públicamente en el repositorio: \url{https://github.com/mario89torres/pmbtc-quant}.
-
-\paragraph{\textbf{Descargo de Responsabilidad de Riesgo (Risk Disclosure)}} Este documento constituye un reporte técnico de investigación cuantitativa y prueba de concepto algorítmica. Los rendimientos pasados y simulados no garantizan resultados futuros. El comercio algorítmico en mercados de predicción binarios implica riesgo de pérdida de capital debido a volatilidad extrema, fallas de oráculo e iliquidez.
+\section{Discusión Científica}
+1. **La verdad sobre las entradas direccionales**: El análisis sobre los datos reales confirma que filtrar con ventaja baja ($\le 1.5\%$) genera tasas de acierto cercanas al $50\%-54\%$ cuyo intervalo de confianza cruza el nivel de equilibrio. Por lo tanto, no se puede afirmar que haya una ventaja estadísticamente significativa en umbrales bajos.
+2. **Superioridad del umbral de alta convicción (3.0c)**: Únicamente al exigir una ventaja $\ge 3.0\%$, el modelo aísla 169 oportunidades donde la tasa de acierto del **$58.0\%$** sostiene un IC ($[50.5\%, 65.2\%]$) **por encima del equilibrio ($49.8\%$)**, confirmando una señal real demostrable.
+3. **Consistencia de la Estrategia Market Maker**: La captura de spread mediante órdenes límite con control de inventario resulta ser la vía más consistente para rentabilizar la microestructura de Polymarket.
 
 \section{Conclusión}
-El marco \texttt{pmbtc} demuestra que combinar la física probabilística (GBM) con ensambles de aprendizaje automático calibrados (XGBoost), validación temporal rigurosa y provisión autónoma de liquidez descontando costos reales elimina eficazmente el riesgo direccional no sistemático en mercados de predicción binarios de corto plazo.
+La evaluación honesta sobre los datos empíricos de \texttt{pmbtc.db} demuestra que en lugar de buscar predicciones direccionales frecuentes, el enfoque cuantitativo óptimo consiste en operar la estrategia Market Maker o limitar las entradas direccionales a umbrales de alta convicción ($\ge 3.0\%$).
 
 \begin{thebibliography}{1}
 \bibitem{avellaneda2008_es} M. Avellaneda y S. Stoikov, ``High-frequency trading in a limit order book,'' \emph{Quantitative Finance}, vol. 8, no. 3, pp. 217--224, 2008.
