@@ -192,7 +192,7 @@ for (const minEdge of UMBRALES) {
   );
 }
 
-// Market Maker (Banca $25.00 USD, Órdenes de $3.00 a $5.00 USD)
+// Market Maker (Banca $25.00 USD, Órdenes $3-$5 USD, Filtro Spread 0.8c + Inventory Skew)
 const makerCandlePnLs = [];
 let totalFills = 0;
 let totalGrossPnL = 0;
@@ -200,6 +200,7 @@ const BANKROLL_USD = 25.0; // Banca inicial de $25 USD
 const MIN_ORDER_USD = 3.0; // Tamaño mínimo por orden ($3 USD)
 const MAX_ORDER_USD = 5.0; // Tamaño máximo por orden ($5 USD)
 const MAX_INVENTORY = Math.floor(BANKROLL_USD / MAX_ORDER_USD); // 5 posiciones máx
+const MIN_SPREAD_THRESHOLD = 0.008; // Filtro de spread mínimo (0.8c / 0.8%)
 
 for (const b of velas) {
   const ticks = qTicks.all(b.start_ts);
@@ -209,7 +210,14 @@ for (const b of velas) {
     if (t.t_left < 30 || t.t_left > 870) continue;
     const upAsk = t.up_ask || 0.51;
     const upBid = t.up_bid || 0.50;
-    const spread = Math.max(0.01, upAsk - upBid);
+    const rawSpread = Math.max(0.005, upAsk - upBid);
+
+    // 1. Filtro de spread mínimo: no operar si el libro está demasiado apretado
+    if (rawSpread < MIN_SPREAD_THRESHOLD) continue;
+
+    // 2. Re-cotización Asimétrica por Inventario (Inventory Skew): elevar ask al acumular inventario
+    const skewOffset = (inventory / MAX_INVENTORY) * 0.008;
+    const effectiveSpread = rawSpread + skewOffset;
 
     if (t.cl_price && b.ref_price) {
       if (inventory < MAX_INVENTORY && Math.random() < 0.25) {
@@ -217,8 +225,8 @@ for (const b of velas) {
       } else if (inventory > 0 && Math.random() < 0.25) {
         inventory -= 1;
         totalFills++;
-        const orderSizeUsd = MIN_ORDER_USD + Math.random() * (MAX_ORDER_USD - MIN_ORDER_USD);
-        const p = spread * orderSizeUsd;
+        const orderSizeUsd = MIN_ORDER_USD + (inventory * 0.4);
+        const p = effectiveSpread * orderSizeUsd;
         candleGross += p;
         totalGrossPnL += p;
       }

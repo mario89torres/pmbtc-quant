@@ -155,10 +155,22 @@ class PolymarketBot:
                 await asyncio.sleep(5)
 
     async def _run_dry_run_strategy(self, best_bid: float, best_ask: float, mid_price: float):
-        spread_val = mid_price * (self.spread_pct / 100.0)
+        market_spread = best_ask - best_bid
+        
+        # 1. OPTIMIZACIÓN 1: Filtro de Spread Mínimo (Evitar operar cuando el spread es < 0.010 / 1.0%)
+        min_required_spread = 0.010
+        if market_spread < min_required_spread:
+            self.log("info", f"Spread ajustado ({market_spread:.3f} < {min_required_spread:.3f}). Esperando expansión de liquidez...")
+            return
+
+        # 2. OPTIMIZACIÓN 2: Re-cotización Asimétrica por Inventario (Inventory Skew)
+        # Si acumulamos posiciones largas, elevamos la punta vendedora (+0.010) para capturar más spread en la salida
+        inventory_ratio = min(1.0, self.sim_position / (self.order_size_usdc * 3))
+        skew_offset = round(inventory_ratio * 0.010, 3)
+
+        spread_val = max(market_spread, mid_price * (self.spread_pct / 100.0))
         
         # --- Check active simulated orders for fills ---
-        # A simulated BUY is filled if the market's best ask falls to or below our buy price (someone sold to us)
         if self.sim_open_buy_order:
             buy_price = self.sim_open_buy_order["price"]
             if best_ask <= buy_price:
@@ -181,7 +193,6 @@ class PolymarketBot:
                     self.log("warning", "Insufficient simulated USDC balance to fill buy order! Cancelling order.")
                     self.sim_open_buy_order = None
 
-        # A simulated SELL is filled if the market's best bid rises to or above our sell price (someone bought from us)
         if self.sim_open_sell_order:
             sell_price = self.sim_open_sell_order["price"]
             if best_bid >= sell_price:
@@ -189,7 +200,6 @@ class PolymarketBot:
                 qty = self.sim_open_sell_order["quantity"]
                 revenue = qty * fill_price
                 
-                # Calculate trade PnL
                 cost_basis = qty * self.sim_avg_buy_price
                 trade_pnl = revenue - cost_basis
                 
@@ -198,61 +208,50 @@ class PolymarketBot:
                 self.realized_pnl += trade_pnl
                 self.total_sim_trades += 1
                 
-                self.log("sell", f"Simulated SELL Filled: {qty:.2f} YES/NO @ ${fill_price:.2f} | Revenue: {revenue:.2f} USDC | PnL: +{trade_pnl:.2f} USDC")
+                self.log("sell", f"Simulated SELL Filled: {qty:.2f} YES/NO @ ${fill_price:.2f} | Revenue: {revenue:.2f} USDC | PnL: +{trade_pnl:.2f} USDC (Inventory Skew Boost)")
                 
                 if self.sim_position < 0.01:
                     self.sim_position = 0.0
                     self.sim_avg_buy_price = 0.0
                 self.sim_open_sell_order = None
 
-        # --- Place new orders or re-grid if price moves ---
-        # Strategy: Grid Market Making
+        # --- Place new orders or re-grid with Inventory Skew ---
         target_buy_price = round(mid_price - (spread_val / 2.0), 3)
-        target_sell_price = round(mid_price + (spread_val / 2.0), 3)
+        # Aplicar Inventory Skew a la punta vendedora
+        target_sell_price = round(mid_price + (spread_val / 2.0) + skew_offset, 3)
         
-        # Safety bounds (Polymarket prices must be between 0.01 and 0.99)
         target_buy_price = max(0.01, min(0.98, target_buy_price))
         target_sell_price = max(0.02, min(0.99, target_sell_price))
         
         # 1. Manage BUY Order
-        # We buy if we have balance and position is not maxed out
         if not self.sim_open_buy_order and self.sim_position < (self.order_size_usdc * 3):
-            # Calculate quantity to buy
             qty = self.order_size_usdc / target_buy_price
             self.sim_open_buy_order = {
                 "price": target_buy_price,
                 "quantity": qty
             }
-            self.log("info", f"Placing Simulated Limit BUY: {qty:.2f} contracts @ ${target_buy_price:.2f}")
+            self.log("info", f"Placing Limit BUY: {qty:.2f} contracts @ ${target_buy_price:.2f}")
             
         elif self.sim_open_buy_order:
-            # If price moved significantly (> 2% from target), cancel and replace
             existing_price = self.sim_open_buy_order["price"]
             if abs(existing_price - target_buy_price) / existing_price > 0.03:
-                self.log("info", f"Cancelling buy order (${existing_price:.2f}) - Price moved. Re-centering grid.")
                 self.sim_open_buy_order = None
 
         # 2. Manage SELL Order
-        # In prediction markets, you can only sell if you hold the contract (cannot naked short)
         if self.sim_position >= 0.5:
-            # Sell target must be higher than avg buy price to guarantee profit, or grid sell
-            sell_price_threshold = max(target_sell_price, round(self.sim_avg_buy_price * 1.01, 3))
+            sell_price_threshold = max(target_sell_price, round(self.sim_avg_buy_price + 0.015, 3))
             
             if not self.sim_open_sell_order:
-                # Sell the position
                 qty = self.sim_position
                 self.sim_open_sell_order = {
                     "price": sell_price_threshold,
                     "quantity": qty
                 }
-                self.log("info", f"Placing Simulated Limit SELL: {qty:.2f} contracts @ ${sell_price_threshold:.2f} (Avg Cost: ${self.sim_avg_buy_price:.2f})")
+                self.log("info", f"Placing Limit SELL (Inventory Skew): {qty:.2f} contracts @ ${sell_price_threshold:.2f} (Avg Cost: ${self.sim_avg_buy_price:.2f})")
             elif self.sim_open_sell_order:
-                # If market mid-price moves way above our sell order or falls low, re-adjust
                 existing_price = self.sim_open_sell_order["price"]
                 if abs(existing_price - sell_price_threshold) / existing_price > 0.03:
-                    # Don't lower sell price below average buy price!
                     if sell_price_threshold >= self.sim_avg_buy_price:
-                        self.log("info", f"Cancelling sell order (${existing_price:.2f}) - Adjusting to new target (${sell_price_threshold:.2f})")
                         self.sim_open_sell_order = None
 
     async def _run_live_strategy(self, best_bid: float, best_ask: float, mid_price: float):
