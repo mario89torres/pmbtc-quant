@@ -1,0 +1,5 @@
+# Declarar archivos binarios explícitamente para evitar corrupción por conversión CRLF/LF en Git
+*.pdf binary
+*.png binary
+*.jpg binary
+*.db binary
