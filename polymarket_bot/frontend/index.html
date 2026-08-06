@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Trading Bot Dashboard</title>
+    <!-- Modern Premium Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+
+    <div class="app-container">
+        <!-- Top Navigation / Header -->
+        <header class="dashboard-header glass-card">
+            <div class="logo-area">
+                <i class="fa-solid fa-trident logo-icon"></i>
+                <div class="logo-text">
+                    <h1>Polymarket</h1>
+                    <span>QUANT ENGINE v1.0.0</span>
+                </div>
+            </div>
+            
+            <div class="header-status-group">
+                <div class="status-indicator" id="ws-status">
+                    <span class="status-dot warning-pulse"></span>
+                    <span class="status-label">WS: Connecting</span>
+                </div>
+                
+                <div class="status-indicator" id="bot-status-indicator">
+                    <span class="status-dot inactive-dot"></span>
+                    <span class="status-label">Engine: Inactive</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Content Grid -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Panel: Market Discovery & Controls -->
+            <section class="grid-panel left-panel">
+                
+                <!-- Wallet & Mode Config -->
+                <div class="glass-card panel-card" id="config-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-wallet card-icon"></i>
+                        <h2>Connection Profile</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-group-row">
+                            <label>Execution Mode</label>
+                            <div class="mode-toggle-group">
+                                <button class="mode-btn active" id="btn-dry-run">Dry Run</button>
+                                <button class="mode-btn" id="btn-live">Live Trading</button>
+                            </div>
+                        </div>
+                        
+                        <div class="info-row" id="wallet-address-display">
+                            <span class="info-label">Simulation Wallet:</span>
+                            <span class="info-value text-glow-blue">Simulated (Demo Mode)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Market Search/Explorer -->
+                <div class="glass-card panel-card" id="search-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-magnifying-glass card-icon"></i>
+                        <h2>Market Explorer</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="search-bar">
+                            <input type="text" id="market-search-input" placeholder="Search markets (e.g., Bitcoin, Fed, Election)..." value="crypto">
+                            <button id="btn-search"><i class="fa-solid fa-search"></i></button>
+                        </div>
+                        <div class="search-results-container" id="search-results">
+                            <div class="loading-state hidden"><i class="fa-solid fa-circle-notch fa-spin"></i> Fetching markets...</div>
+                            <div class="empty-state">Enter a term to search active Polymarket markets.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strategy & Execution Configuration -->
+                <div class="glass-card panel-card" id="strategy-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-sliders card-icon"></i>
+                        <h2>Strategy Parameters</h2>
+                    </div>
+                    <div class="card-body">
+                        <!-- Strategy Dropdown -->
+                        <div class="input-field">
+                            <label for="select-strategy">Trading Strategy</label>
+                            <select id="select-strategy">
+                                <option value="grid">Grid Market Making (Spread Provider)</option>
+                                <option value="trend" disabled>Trend Momentum (Follower) [Locked]</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Selected Market Outcome details -->
+                        <div class="selected-market-banner hidden" id="selected-market-info">
+                            <div class="banner-title">Selected Target:</div>
+                            <div class="banner-question" id="banner-question-text">Will BTC hit $100k?</div>
+                            <div class="outcome-selector-group" id="banner-outcome-group">
+                                <!-- Generated outcomes buttons (YES / NO) -->
+                            </div>
+                        </div>
+
+                        <!-- Numeric inputs -->
+                        <div class="input-grid">
+                            <div class="input-field">
+                                <label for="input-order-size">Order Size (USDC)</label>
+                                <div class="numeric-input-wrapper">
+                                    <input type="number" id="input-order-size" value="5.00" min="1.00" step="1.00">
+                                </div>
+                            </div>
+                            <div class="input-field">
+                                <label for="input-spread">Target Spread (%)</label>
+                                <div class="numeric-input-wrapper">
+                                    <input type="number" id="input-spread" value="2.00" min="0.10" max="20.00" step="0.10">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Big Action Toggle Button -->
+                        <button class="action-btn start-btn" id="btn-bot-toggle" disabled>
+                            <i class="fa-solid fa-play"></i> Start Bot Engine
+                        </button>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Middle Panel: Live Book & Performance -->
+            <section class="grid-panel middle-panel">
+                
+                <!-- Order Book Visualizer -->
+                <div class="glass-card panel-card flex-grow-1" id="orderbook-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-chart-simple card-icon"></i>
+                        <h2>Order Book Ladder</h2>
+                        <span class="active-token-badge" id="active-token-display">No Token Selected</span>
+                    </div>
+                    <div class="card-body orderbook-container">
+                        <div class="mid-price-banner">
+                            <span class="mid-price-label">MID PRICE</span>
+                            <span class="mid-price-value" id="mid-price-display">--</span>
+                        </div>
+                        
+                        <!-- Bid/Ask Ladder -->
+                        <div class="book-ladder">
+                            <!-- Asks (Red, high to low) -->
+                            <div class="ladder-section asks-section" id="book-asks">
+                                <div class="ladder-row header">
+                                    <span>Ask Price</span>
+                                    <span>Quantity</span>
+                                    <span>Depth</span>
+                                </div>
+                                <div class="empty-book-label">Select a market outcome to view asks</div>
+                            </div>
+                            
+                            <div class="ladder-separator">
+                                <span>SPREAD: <span id="spread-value-display">--</span></span>
+                            </div>
+                            
+                            <!-- Bids (Green, high to low) -->
+                            <div class="ladder-section bids-section" id="book-bids">
+                                <div class="ladder-row header">
+                                    <span>Bid Price</span>
+                                    <span>Quantity</span>
+                                    <span>Depth</span>
+                                </div>
+                                <div class="empty-book-label">Select a market outcome to view bids</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulator Account Details -->
+                <div class="glass-card panel-card" id="performance-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-chart-line card-icon"></i>
+                        <h2>Simulator Accounts & Stats</h2>
+                    </div>
+                    <div class="card-body stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">Sim Balance (USDC)</span>
+                            <span class="stat-val font-mono" id="stat-balance">$1,000.00</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Holdings (Contracts)</span>
+                            <span class="stat-val font-mono" id="stat-position">0.00</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Avg Entry Price</span>
+                            <span class="stat-val font-mono" id="stat-avg-price">$0.00</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Realized Profit</span>
+                            <span class="stat-val font-mono text-glow-green" id="stat-pnl">+$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Right Panel: Live Execution Log Terminal & Open Orders -->
+            <section class="grid-panel right-panel">
+                
+                <!-- Terminal Console -->
+                <div class="glass-card panel-card flex-grow-1" id="terminal-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-terminal card-icon"></i>
+                        <h2>Engine Logs</h2>
+                        <button class="clear-logs-btn" id="btn-clear-logs"><i class="fa-solid fa-trash-can"></i> Clear</button>
+                    </div>
+                    <div class="card-body terminal-body">
+                        <div class="terminal-stdout" id="terminal-output">
+                            <div class="log-line system-line">[SYSTEM] Terminal initialized. Waiting for bot engine to start...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Grid Positions / Simulated Orders -->
+                <div class="glass-card panel-card" id="active-orders-card">
+                    <div class="card-header">
+                        <i class="fa-solid fa-list-check card-icon"></i>
+                        <h2>Active Sim Orders</h2>
+                    </div>
+                    <div class="card-body">
+                        <table class="orders-table">
+                            <thead>
+                                <tr>
+                                    <th>Side</th>
+                                    <th>Price</th>
+                                    <th>Quantity</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="active-orders-table-body">
+                                <tr>
+                                    <td colspan="4" class="no-orders">No active simulated orders resting on book</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Script Entrypoint -->
+    <script src="/app.js"></script>
+</body>
+</html>

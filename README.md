@@ -16,6 +16,7 @@
 - [Auditoría Metodológica Muestral (Nivel de Vela $N=407$)](#-auditoría-metodológica-muestral-nivel-de-vela-n407)
 - [⚡ Estrategia del Creador de Mercado Autónomo (Market Maker)](#-estrategia-del-creador-de-mercado-autónomo-market-maker)
 - [Modelos Predictivos y Control de Riesgo](#modelos-predictivos-y-control-de-riesgo)
+- [🤖 Módulo Secundario: Bot de Ejecución en Python + Dashboard FastAPI (`polymarket_bot/`)](#-módulo-secundario-bot-de-ejecución-en-python--dashboard-fastapi-polymarket_bot)
 - [Instalación y Ejecución del Backtest](#instalación-y-ejecución-del-backtest)
 - [Whitepaper Técnico y Reporte de Auditoría](#whitepaper-técnico-y-reporte-de-auditoría)
 
@@ -73,10 +74,24 @@ La estrategia **Market Maker** actúa como **proveedor autónomo de liquidez**, 
 
 ---
 
-## 💻 Instalación y Ejecución del Backtest
+## 🤖 Módulo Secundario: Bot de Ejecución en Python + Dashboard FastAPI (`polymarket_bot/`)
 
+El directorio [`polymarket_bot/`](./polymarket_bot/) proporciona una suite secundaria autónoma escrita en **Python 3.8+ / FastAPI** diseñada para la ejecución directa de órdenes y simulación de trading en tiempo real (*Paper Trading / Dry Run*):
+
+- **Simulador Dry-Run (Paper Trading)**: Ejecuta estrategias de Grid Trading y Market Making emparejando precios de la libreta de órdenes sin riesgo de capital.
+- **Cliente CLOB en Vivo (`py-clob-client`)**: Integración con las credenciales L2 de Polymarket en Polygon Mainnet para firma de mensajes EIP-712 y envío de órdenes límite real.
+- **Dashboard Web Independiente en FastAPI**: Interfaz alternativa en `http://localhost:8000` para exploración de mercados Gamma y visualización de order books.
+
+Para arrancar el módulo de Python:
 ```bash
-# 1. Clonar repositorio
+cd polymarket_bot
+pip install -r requirements.txt
+python backend/main.py
+```
+
+---
+
+## 💻 Instalación y Ejecución del Servidor Principal (Node.js) Clonar repositorio
 git clone https://github.com/mario89torres/pmbtc-quant.git
 cd pmbtc-quant
 
