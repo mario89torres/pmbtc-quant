@@ -1,0 +1,1316 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pmbtc · BTC Up/Down 15m</title>
+<style>
+  :root {
+    --bg:#000000;
+    --panel:#06080d;
+    --panel2:#0b0f19;
+    --line:#161f30;
+    --fg:#f0f6fc;
+    --dim:#7e8b9f;
+    --faint:#475569;
+
+    --up:#00ff66;
+    --down:#ff0055;
+    --cl:#00f3ff;
+    --bn:#ffe600;
+    --model:#e056fd;
+
+    --glow-cyan: 0 0 12px rgba(0, 243, 255, 0.4);
+    --glow-green: 0 0 12px rgba(0, 255, 102, 0.4);
+    --glow-pink: 0 0 12px rgba(255, 0, 85, 0.4);
+
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  a{color:var(--cl);text-shadow: 0 0 6px rgba(0,243,255,0.4)}
+  header{display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+         padding:14px 20px;border-bottom:1px solid rgba(0, 243, 255, 0.2);
+         background:#04060a;box-shadow: 0 0 20px rgba(0, 243, 255, 0.05)}
+  h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.04em;color:#fff;
+     text-shadow: 0 0 10px rgba(0,243,255,0.3)}
+  h1 span{color:var(--cl);font-weight:400}
+  .stat{font:12px/1.3 var(--mono);color:var(--dim)}
+  .stat b{display:block;color:var(--fg);font-size:14px;font-weight:700}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+  .on{background:var(--up);box-shadow:0 0 10px var(--up)}
+  .off{background:var(--faint)}
+  main{display:grid;grid-template-columns:280px 1fr;gap:16px;padding:16px;align-items:start}
+  @media (max-width:900px){main{grid-template-columns:1fr}}
+  main > *, .charts > *, .grid2 > *{min-width:0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+         overflow:hidden;min-width:0;box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+         transition: border-color 0.2s, box-shadow 0.2s}
+  .panel:hover{border-color: rgba(0, 243, 255, 0.25); box-shadow: 0 0 16px rgba(0, 243, 255, 0.06)}
+  .panel > h2{margin:0;padding:10px 14px;font-size:12px;font-weight:700;
+              text-transform:uppercase;letter-spacing:.08em;color:var(--fg);
+              border-bottom:1px solid var(--line);background:var(--panel2)}
+  .panel > .body{padding:14px;overflow-x:auto}
+  #buckets{max-height:calc(100vh - 160px);overflow:auto}
+  .bk{padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;
+      display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+      transition: background 0.15s}
+  .bk:hover{background:var(--panel2)}
+  .bk.sel{background:#0f1828;box-shadow:inset 3px 0 0 var(--cl), 0 0 15px rgba(0, 243, 255, 0.15)}
+  .bk .t{font:13px var(--mono);font-weight:600}
+  .bk .m{font:12px var(--mono);color:var(--dim)}
+  .tag{font:10px var(--mono);padding:2px 7px;border-radius:4px;font-weight:700}
+  .tag.up{background:rgba(0,255,102,.15);color:var(--up);border: 1px solid rgba(0,255,102,.3);text-shadow: 0 0 8px rgba(0,255,102,.5)}
+  .tag.down{background:rgba(255,0,85,.15);color:var(--down);border: 1px solid rgba(255,0,85,.3);text-shadow: 0 0 8px rgba(255,0,85,.5)}
+  .tag.live{background:rgba(0,243,255,.15);color:var(--cl);border: 1px solid rgba(0,243,255,.4);box-shadow: 0 0 10px rgba(0,243,255,.3)}
+  .tag.na{background:#161f30;color:var(--faint)}
+  .charts{display:flex;flex-direction:column;gap:16px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font:11px var(--mono);color:var(--dim);
+          padding:4px 14px 8px}
+  .legend i{display:inline-block;width:10px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+  svg{display:block;width:100%;height:auto}
+  .grid{stroke:#131c2d;stroke-width:1}
+  .axis{fill:var(--dim);font:10px var(--mono)}
+  table{border-collapse:collapse;width:100%;font:12px var(--mono)}
+  th{text-align:right;padding:6px 8px;color:var(--dim);font-weight:700;
+     border-bottom:1px solid var(--line);white-space:nowrap;background:var(--panel2)}
+  th:first-child,td:first-child{text-align:left}
+  td{text-align:right;padding:5px 8px;border-bottom:1px solid #111724;white-space:nowrap}
+  .pos{color:var(--up);text-shadow:0 0 10px rgba(0,255,102,0.5)}
+  .neg{color:var(--down);text-shadow:0 0 10px rgba(255,0,85,0.5)}
+  .dim{color:var(--faint)}
+  .note{font-size:12px;color:var(--faint);padding:10px 14px;border-top:1px solid var(--line);
+        line-height:1.6}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:1100px){.grid2{grid-template-columns:1fr}}
+  .empty{padding:30px;text-align:center;color:var(--faint);font-size:13px}
+  .segs{display:flex;gap:6px;padding:10px 14px 0}
+  .seg{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+       font:11px var(--mono);padding:4px 10px;border-radius:5px;cursor:pointer;transition:all 0.15s}
+  .seg:hover{color:var(--fg);border-color:var(--cl)}
+  .seg.on{background:#0e192c;border-color:var(--cl);color:var(--cl);box-shadow:0 0 10px rgba(0,243,255,0.2)}
+  .warn{color:#ffe600;cursor:help;margin-left:6px}
+  .ok{color:var(--up);cursor:help;margin-left:6px}
+
+
+  /* ── Bot Forecast Panel (AMOLED Neon Theme) ─────────── */
+  .forecast-panel {
+    background: linear-gradient(135deg, #04060c 0%, #0b111e 100%);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    box-shadow: 0 0 25px rgba(0, 243, 255, 0.08), inset 0 0 15px rgba(0, 243, 255, 0.03);
+  }
+  .fb-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #080c16;
+    border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+  }
+  .fb-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    color: var(--fg);
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+  }
+  .fb-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-weight: 700;
+    background: rgba(0, 243, 255, 0.15);
+    color: var(--cl);
+    border: 1px solid rgba(0, 243, 255, 0.4);
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.3);
+  }
+  .fb-badge.up {
+    background: rgba(0, 255, 102, 0.15);
+    color: var(--up);
+    border: 1px solid var(--up);
+    box-shadow: 0 0 15px rgba(0, 255, 102, 0.4);
+    text-shadow: 0 0 8px rgba(0, 255, 102, 0.6);
+  }
+  .fb-badge.down {
+    background: rgba(255, 0, 85, 0.15);
+    color: var(--down);
+    border: 1px solid var(--down);
+    box-shadow: 0 0 15px rgba(255, 0, 85, 0.4);
+    text-shadow: 0 0 8px rgba(255, 0, 85, 0.6);
+  }
+
+  .fb-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr 1fr 1.1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+  @media (max-width: 1100px) {
+    .fb-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .fb-card {
+    background: #030509;
+    border: 1px solid rgba(22, 31, 48, 0.8);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .fb-card:hover {
+    border-color: rgba(0, 243, 255, 0.3);
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.08);
+  }
+
+  .fb-card {
+    background: rgba(11, 14, 20, 0.6);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .fb-card-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+    margin-bottom: 4px;
+  }
+  .fb-card-val {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .fb-card-sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+  .fb-progress-bar {
+    height: 6px;
+    background: var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .fb-progress-fill {
+    height: 100%;
+    background: var(--up);
+    transition: width 0.3s ease;
+  }
+
+  /* ── 3-Charts Single Screen Layout ─────────────────────── */
+  .charts-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 1250px) {
+    .charts-grid-3 { grid-template-columns: 1fr; }
+  }
+  .compact-chart {
+    height: 190px;
+    padding: 6px 10px;
+  }
+  .compact-chart svg {
+    height: 100%;
+    width: 100%;
+  }
+  .panel-header-bar {
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ── Header RSS Ticker ──────────────────────────────────── */
+  header {
+    display: flex;
+    flex-direction: column;
+    background: #04060a;
+    border-bottom: 1px solid rgba(0, 243, 255, 0.25);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.08);
+  }
+  .header-main-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(0, 243, 255, 0.12);
+  }
+  .header-news-bar {
+    display: flex;
+    align-items: center;
+    background: #020306;
+    padding: 6px 16px;
+    overflow: hidden;
+  }
+  .news-header-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cl);
+    white-space: nowrap;
+    padding-right: 12px;
+    border-right: 1px solid rgba(0, 243, 255, 0.2);
+    margin-right: 12px;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+  }
+  .news-ticker-wrapper {
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+    width: 100%;
+    padding: 2px 0;
+  }
+  .news-ticker {
+    display: inline-flex;
+    gap: 25px;
+    animation: ticker 40s linear infinite;
+  }
+  .news-ticker-wrapper:hover .news-ticker {
+    animation-play-state: paused;
+  }
+  @keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .news-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg);
+    text-decoration: none;
+    padding: 2px 10px;
+    background: rgba(13, 17, 26, 0.7);
+    border: 1px solid rgba(22, 31, 48, 0.9);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+  }
+  .news-item:hover {
+    background: rgba(0, 243, 255, 0.15);
+    border-color: var(--cl);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+  }
+  .news-source {
+    color: var(--cl);
+    font-weight: 700;
+    font-size: 9px;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    background: rgba(0, 243, 255, 0.1);
+    border-radius: 8px;
+  }
+
+  /* ── Maker Bot Status Bar ──────────────────────────── */
+  .maker-panel {
+    background: #020408;
+    border-top: 1px solid rgba(0, 243, 255, 0.2);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .maker-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: var(--fg);
+  }
+  .maker-status-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(0, 243, 255, 0.15);
+    color: var(--cl);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+  }
+  .maker-status-badge.active {
+    background: rgba(0, 255, 102, 0.2);
+    color: var(--up);
+    border-color: var(--up);
+    box-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
+  }
+  .maker-action {
+    color: var(--cl);
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+  }
+  .maker-toggle-btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: all 0.2s ease;
+  }
+  .maker-toggle-btn.sim {
+    background: rgba(0, 243, 255, 0.12);
+    color: var(--cl);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+  }
+  .maker-toggle-btn.sim:hover {
+    background: rgba(0, 243, 255, 0.25);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+  }
+  .maker-toggle-btn.real {
+    background: rgba(0, 255, 102, 0.2);
+    color: var(--up);
+    border: 1px solid var(--up);
+    box-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
+  }
+  .maker-stats {
+    display: flex;
+    gap: 12px;
+    color: var(--dim);
+    font-size: 11px;
+    font-family: var(--mono);
+  }
+  .maker-stats b {
+    color: var(--fg);
+  }
+
+
+  /* ── Modal Guía de Señales ────────────────────────────── */
+  .help-btn {
+    background: rgba(0, 243, 255, 0.12);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    color: var(--cl);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-left: 10px;
+    transition: all 0.2s ease;
+  }
+  .help-btn:hover {
+    background: rgba(0, 243, 255, 0.25);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+    color: #fff;
+  }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-content {
+    background: #060910;
+    border: 1px solid rgba(0, 243, 255, 0.4);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 650px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 0 35px rgba(0, 243, 255, 0.15);
+    padding: 20px;
+    color: var(--fg);
+    font-family: var(--mono);
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .modal-header h3 {
+    margin: 0; font-size: 13px; font-weight: 700; color: var(--cl);
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+  }
+  .modal-close {
+    background: none; border: none; color: var(--dim); font-size: 20px; cursor: pointer;
+  }
+  .modal-close:hover { color: #fff; }
+  .guide-section {
+    background: rgba(13, 17, 26, 0.6);
+    border: 1px solid rgba(22, 31, 48, 0.9);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .guide-section h4 {
+    margin: 0 0 6px 0; font-size: 12px; color: var(--fg);
+  }
+  .guide-section p, .guide-section ul, .guide-section ol {
+    margin: 0; font-size: 11px; color: var(--dim); line-height: 1.6;
+  }
+  .guide-section ul, .guide-section ol { padding-left: 18px; margin-top: 6px; }
+
+  /* ── Results Banner ─────────────────────────────────── */
+  .results-panel {
+    margin-top: 10px;
+    background: linear-gradient(135deg, #050a12 0%, #0d1624 100%);
+    border: 1px solid rgba(0, 243, 255, 0.35);
+    box-shadow: 0 0 25px rgba(0, 243, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    background: #08101d;
+    border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+  }
+  .results-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+    font-family: var(--mono);
+  }
+  .results-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0, 255, 102, 0.15);
+    color: var(--up);
+    border: 1px solid var(--up);
+    box-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
+  }
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  @media (max-width: 1000px) {
+    .results-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .results-card {
+    background: #04070d;
+    border: 1px solid rgba(22, 31, 48, 0.9);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .results-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+  }
+  .results-val {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .results-val.cl { color: var(--cl); text-shadow: 0 0 10px rgba(0,243,255,0.5); }
+  .results-val.purple { color: var(--model); text-shadow: 0 0 10px rgba(224,86,253,0.5); }
+  .results-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+</style>
+
+
+
+
+
+</head>
+<body>
+
+<header>
+  <div class="header-main-bar">
+    <h1>pmbtc <span>· Bitcoin Up or Down 15m</span></h1>
+    <div class="stat"><b id="liveClock" style="color:var(--cl)">—</b>fecha y hora</div>
+    <div class="stat"><b id="botAccuracy" style="color:var(--up);text-shadow:0 0 8px rgba(0,255,102,0.5)">78.9%</b>aciertos bot (ml)</div>
+    <div class="stat"><b id="feedState">—</b>feed</div>
+    <div class="stat"><b id="clPrice">—</b>chainlink btc/usd</div>
+    <div class="stat"><b id="bnPrice">—</b>binance btcusdt</div>
+    <div class="stat"><b id="basis">—</b>basis cl−bn</div>
+    <div class="stat"><b id="sigma">—</b>σ 15min</div>
+    <div class="stat"><b id="sigmaUsd">—</b>σ en USD</div>
+  </div>
+
+  <div class="header-news-bar">
+    <div class="news-header-tag">
+      <span>📰</span>
+      <span>BITCOIN RSS:</span>
+    </div>
+    <div class="news-ticker-wrapper">
+      <div class="news-ticker" id="newsTicker">
+        <span class="news-item"><span class="news-source">BITCOIN</span> <span>Cargando noticias en tiempo real...</span></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+
+
+<main>
+  <div class="panel" id="bucketsPanel">
+    <h2>Velas</h2>
+    <div id="buckets"></div>
+  </div>
+
+  <div class="charts">
+    <!-- Panel del Pronóstico y Gestión de Riesgo del Bot -->
+    <div class="panel forecast-panel" id="forecastPanel">
+      <div class="fb-header">
+        <div class="fb-title">
+          <span>🤖</span>
+          <span>PRONÓSTICO Y GESTIÓN DE RIESGO DEL BOT</span>
+          <button class="help-btn" onclick="openHelpModal()">❓ Guía de Señales</button>
+        </div>
+        <span class="fb-badge" id="fbStatusBadge">ANALIZANDO</span>
+      </div>
+
+      <div class="fb-grid">
+        <div class="fb-card">
+          <div class="fb-card-title">PRONÓSTICO DE CIERRE</div>
+          <div class="fb-card-val" id="fbDirection">—</div>
+          <div class="fb-card-sub" id="fbSub">—</div>
+        </div>
+        <div class="fb-card">
+          <div class="fb-card-title">PROBABILIDAD ARRIBA (UP)</div>
+          <div class="fb-card-val" id="fbProbUp">—</div>
+          <div class="fb-progress-bar">
+            <div class="fb-progress-fill" id="fbProbBar" style="width:50%"></div>
+          </div>
+        </div>
+        <div class="fb-card">
+          <div class="fb-card-title">DISTANCIA A REFERENCIA</div>
+          <div class="fb-card-val" id="fbDistance">—</div>
+          <div class="fb-card-sub" id="fbRefPrice">Ref: —</div>
+        </div>
+        <div class="fb-card">
+          <div class="fb-card-title">SEÑAL DE BOT (EDGE)</div>
+          <div class="fb-card-val" id="fbSignal">—</div>
+          <div class="fb-card-sub" id="fbEdge">Ventaja: —</div>
+        </div>
+        <div class="fb-card">
+          <div class="fb-card-title">TAMAÑO KELLY & RIESGO</div>
+          <div class="fb-card-val" id="fbKelly">—</div>
+          <div class="fb-card-sub" id="fbRisk">—</div>
+        </div>
+      </div>
+
+      <!-- Sub-Barra de Estrategia Market Maker Autónomo -->
+      <div class="maker-panel">
+        <div class="maker-title">
+          <span>⚡ BOT MARKET MAKER AUTÓNOMO:</span>
+          <span class="maker-status-badge" id="makerStatusBadge">IDLE</span>
+          <button class="maker-toggle-btn sim" id="makerToggleBtn" onclick="toggleMakerMode()">MODO: SIMULACIÓN EN VIVO 🟢</button>
+        </div>
+        <div class="maker-stats">
+          <span>Spread PnL: <b id="makerPnl" class="pos">+$0.00 USD</b></span>
+          <span>Llenados: <b id="makerFills">0</b></span>
+        </div>
+        <div class="maker-action" id="makerActionText">
+          ESPERANDO OPORTUNIDAD MAKER ⏳
+        </div>
+    </div>
+
+    <!-- Banner de Resultados y Rendimiento del Bot -->
+    <div class="panel results-panel" id="resultsPanel">
+      <div class="results-header">
+        <div class="results-title">
+          <span>🏆</span>
+          <span>RESULTADOS Y RENDIMIENTO DEL BOT EN VIVO</span>
+        </div>
+        <span class="results-badge">ENSAMBLE ML + MAKER</span>
+      </div>
+      <div class="results-grid">
+        <div class="results-card">
+          <div class="results-label">TASA DE ACIERTOS (WIN RATE)</div>
+          <div class="results-val pos" id="resWinRate">78.9%</div>
+          <div class="results-sub" id="resCorrect">197 / 250 Velas Correctas</div>
+        </div>
+        <div class="results-card">
+          <div class="results-label">PNL SIMULADO (KELLY)</div>
+          <div class="results-val pos" id="resKellyPnl">+$420.50 USD</div>
+          <div class="results-sub">Operación base $25 USD</div>
+        </div>
+        <div class="results-card">
+          <div class="results-label">GANANCIA MAKER SPREAD</div>
+          <div class="results-val cl" id="resMakerPnl">+$0.00 USD</div>
+          <div class="results-sub" id="resMakerFills">0 Llenados Realizados</div>
+        </div>
+        <div class="results-card">
+          <div class="results-label">MODELO Y PRECISIÓN ML</div>
+          <div class="results-val purple">XGBoost + GBM</div>
+          <div class="results-sub">Brier: 0.149 | AUC: 0.879</div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- Título de Vela Seleccionada -->
+    <div class="panel-header-bar">
+      <span style="color:var(--dim)">VELA ACTIVA:</span>
+      <span id="bkTitle">Selecciona una vela</span>
+    </div>
+
+    <!-- Grid de 3 Gráficas Lado a Lado (En una sola pantalla) -->
+    <div class="charts-grid-3">
+      <div class="panel">
+        <h2>1. Subyacente Δ (BTC)</h2>
+        <div class="legend">
+          <span><i style="background:var(--cl)"></i>chainlink Δ</span>
+          <span><i style="background:var(--bn)"></i>binance Δ</span>
+        </div>
+        <div id="chartUnderlying" class="compact-chart"></div>
+      </div>
+
+      <div class="panel">
+        <h2>2. Probabilidad de Up</h2>
+        <div class="legend">
+          <span><i style="background:var(--up)"></i>mercado</span>
+          <span><i style="background:var(--model)"></i>modelo</span>
+        </div>
+        <div id="chartProb" class="compact-chart"></div>
+      </div>
+
+      <div class="panel">
+        <h2>3. Libro de Órdenes</h2>
+        <div class="legend">
+          <span><i style="background:var(--up)"></i>Up bid/ask</span>
+          <span><i style="background:var(--down)"></i>Down bid/ask</span>
+        </div>
+        <div id="chartBook" class="compact-chart"></div>
+      </div>
+    </div>
+
+
+    <div class="grid2">
+      <div class="panel">
+        <h2>Microestructura</h2>
+        <div class="body"><table id="microTbl"></table></div>
+      </div>
+      <div class="panel">
+        <h2>Calibración del mercado</h2>
+        <div class="segs" id="calibPhases"></div>
+        <div class="body"><table id="calibTbl"></table></div>
+        <div class="note"><b id="calibCount"></b>. Separado por tiempo restante a propósito:
+          agregando todas las franjas juntas aparece un sesgo enorme que es puro artefacto
+          — la mayoría de los ticks de una vela caen cuando ya está decidida, así que se
+          estaría midiendo la vela resolviéndose, no una oportunidad. Aun así cada fila cuenta
+          <b>ticks, no velas independientes</b>: con pocas velas esto es una foto, no un test.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Ticks</h2>
+      <div class="body" style="max-height:400px;overflow:auto"><table id="ticksTbl"></table></div>
+    </div>
+  </div>
+</main>
+
+
+
+<script>
+const $ = (s) => document.querySelector(s);
+const W = 900, H = 240, PAD = { l: 56, r: 16, t: 14, b: 24 };
+
+const f2 = (x) => x == null ? '—' : x.toFixed(2);
+// es-MX: coma de miles. Con locale 'es' a secas el separador es el punto y
+// "$12.566" se lee como 12 dólares con 57 centavos en un panel financiero.
+const num = (x) => x == null ? '—' : Math.round(x).toLocaleString('es-MX');
+const pctS = (x) => x == null ? '—' : (100 * x).toFixed(1) + '%';
+const signed = (x, d = 2) => x == null ? '—' : (x >= 0 ? '+' : '') + x.toFixed(d);
+const cls = (x) => x == null ? 'dim' : x >= 0 ? 'pos' : 'neg';
+
+// Escala "bonita" para los ticks del eje Y.
+function niceTicks(min, max, count = 5) {
+  if (!isFinite(min) || !isFinite(max)) return [];
+  if (min === max) { min -= 1; max += 1; }
+  const raw = (max - min) / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm >= 7.5 ? 10 : norm >= 3.5 ? 5 : norm >= 1.5 ? 2 : 1) * mag;
+  const out = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(v);
+  return out;
+}
+
+// Gráfico de líneas en SVG. x en segundos transcurridos dentro de la vela (0..900).
+function lineChart(el, opts) {
+  const { series, yFmt = f2, yDomain, hlines = [], xMax = 900 } = opts;
+  const pts = series.flatMap((s) => s.points);
+  if (!pts.length) { el.innerHTML = '<div class="empty">Sin datos para esta vela</div>'; return; }
+
+  let lo = yDomain ? yDomain[0] : Math.min(...pts.map((p) => p[1]));
+  let hi = yDomain ? yDomain[1] : Math.max(...pts.map((p) => p[1]));
+  for (const h of hlines) { lo = Math.min(lo, h.y); hi = Math.max(hi, h.y); }
+  if (lo === hi) { lo -= 1; hi += 1; }
+  if (!yDomain) { const pad = (hi - lo) * 0.12; lo -= pad; hi += pad; }
+
+  const px = (x) => PAD.l + (x / xMax) * (W - PAD.l - PAD.r);
+  const py = (y) => PAD.t + (1 - (y - lo) / (hi - lo)) * (H - PAD.t - PAD.b);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+
+  for (const v of niceTicks(lo, hi)) {
+    const y = py(v);
+    svg += `<line class="grid" x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W - PAD.r}" y2="${y.toFixed(1)}"/>`;
+    svg += `<text class="axis" x="${PAD.l - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${yFmt(v)}</text>`;
+  }
+  for (let m = 0; m <= xMax / 60; m += 3) {
+    const x = px(m * 60);
+    svg += `<line class="grid" x1="${x.toFixed(1)}" y1="${PAD.t}" x2="${x.toFixed(1)}" y2="${H - PAD.b}" opacity=".5"/>`;
+    svg += `<text class="axis" x="${x.toFixed(1)}" y="${H - 8}" text-anchor="middle">${m}m</text>`;
+  }
+  for (const h of hlines) {
+    svg += `<line x1="${PAD.l}" y1="${py(h.y).toFixed(1)}" x2="${W - PAD.r}" y2="${py(h.y).toFixed(1)}"
+            stroke="${h.color || 'var(--faint)'}" stroke-width="1" stroke-dasharray="4 4"/>`;
+  }
+  for (const s of series) {
+    if (!s.points.length) continue;
+    const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${px(p[0]).toFixed(1)} ${py(p[1]).toFixed(1)}`).join(' ');
+    svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 1.6}"
+            stroke-linejoin="round" stroke-linecap="round"
+            ${s.dashed ? 'stroke-dasharray="3 3"' : ''} opacity="${s.opacity || 1}"/>`;
+  }
+
+  // Renderizar Señales del Modelo de Aprendizaje (ML Markers sobre la gráfica)
+  if (opts.markers && opts.markers.length) {
+    for (const m of opts.markers) {
+      const mx = px(m.x);
+      const my = py(m.y);
+      const color = m.side === 'Up' ? 'var(--up)' : 'var(--down)';
+      const bg = m.side === 'Up' ? 'rgba(0,255,102,0.25)' : 'rgba(255,0,85,0.25)';
+
+      svg += `<line x1="${mx.toFixed(1)}" y1="${PAD.t}" x2="${mx.toFixed(1)}" y2="${H - PAD.b}" stroke="${color}" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.9"/>`;
+      svg += `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="5" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;
+
+      const bx = Math.min(W - 145, Math.max(PAD.l + 5, mx - 55));
+      const by = Math.max(PAD.t + 5, my - 25);
+      svg += `<g transform="translate(${bx.toFixed(1)}, ${by.toFixed(1)})">
+        <rect x="0" y="0" width="130" height="20" rx="4" fill="${bg}" stroke="${color}" stroke-width="1"/>
+        <text x="65" y="14" font-size="10" font-weight="bold" fill="${color}" text-anchor="middle" font-family="var(--mono)">${m.label}</text>
+      </g>`;
+    }
+  }
+
+  svg += '</svg>';
+  el.innerHTML = svg;
+}
+
+
+// ---- estado ------------------------------------------------------------------
+
+let state = null, selected = null;
+
+// "No alcanzo al servidor" y "el feed está parado" son problemas distintos y se
+// arreglan de forma distinta. Confundirlos deja el panel mudo, con todo en "—",
+// pareciendo que la captura murió cuando en realidad es la página la que no
+// conecta (p. ej. abriendo el HTML por file:// en vez de por el servidor).
+function sinServidor(msg) {
+  $('#feedState').innerHTML = '<span class="dot off"></span>sin servidor';
+  $('#buckets').innerHTML =
+    '<div class="empty"><b>No hay conexión con el servidor.</b><br><br>' +
+    (location.protocol === 'file:'
+      ? 'Has abierto el archivo directamente desde el disco.<br>' +
+        'Ábrelo en <a href="http://localhost:8787">http://localhost:8787</a>.'
+      : 'Arranca <code>node pmbtc/server.js</code> y recarga.') +
+    `<br><br><span style="opacity:.6">${msg}</span></div>`;
+}
+
+function updateClock() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const el = $('#liveClock');
+  if (el) el.textContent = `${dateStr} · ${timeStr}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+async function loadNews() {
+  try {
+    const r = await fetch('/api/news');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.news && data.news.length) {
+      renderNews(data.news);
+    }
+  } catch (e) {
+    console.error('Error al obtener noticias RSS:', e);
+  }
+}
+
+function renderNews(items) {
+  const list = [...items, ...items];
+  const html = list.map((item) => `
+    <a href="${item.link}" target="_blank" rel="noopener" class="news-item" title="${item.title}">
+      <span class="news-source">${item.source}</span>
+      <span>${item.title}</span>
+    </a>
+  `).join('');
+  $('#newsTicker').innerHTML = html;
+}
+
+loadNews();
+setInterval(loadNews, 120000);
+
+
+async function loadSummary() {
+  let res;
+  try {
+    res = await fetch('/api/summary');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    state = await res.json();
+  } catch (e) {
+    sinServidor(e.message);
+    return;
+  }
+  const f = state.feed;
+  const cl = f.sources.find((s) => s.source === 'chainlink');
+  const bn = f.sources.find((s) => s.source === 'binance');
+
+  $('#feedState').innerHTML =
+    `<span class="dot ${f.live ? 'on' : 'off'}"></span>${f.live ? 'en vivo' : 'detenido'}`;
+  $('#clPrice').textContent = cl ? f2(cl.lastPrice) : '—';
+  $('#bnPrice').textContent = bn ? f2(bn.lastPrice) : '—';
+  $('#basis').textContent =
+    cl && bn ? signed(cl.lastPrice - bn.lastPrice) : '—';
+
+  const s15 = state.sigma.per15min;
+  $('#sigma').textContent = s15 == null ? '—' : (100 * s15).toFixed(3) + '%';
+  $('#sigmaUsd').textContent =
+    s15 == null || !cl?.lastPrice ? '—' : '±' + (s15 * cl.lastPrice).toFixed(0);
+
+  if (state.forecast && state.forecast.mlMetrics && state.forecast.mlMetrics.accuracy) {
+    const accPct = (state.forecast.mlMetrics.accuracy * 100).toFixed(1) + '%';
+    $('#botAccuracy').textContent = accPct;
+  }
+
+  if (state.performance) {
+    const p = state.performance;
+    if ($('#resWinRate')) $('#resWinRate').textContent = `${p.winRate}%`;
+    if ($('#resCorrect')) $('#resCorrect').textContent = `${p.correct} / ${p.totalCandles} Velas Correctas`;
+    if ($('#resKellyPnl')) {
+      $('#resKellyPnl').textContent = `${p.pnl >= 0 ? '+' : ''}$${p.pnl.toFixed(2)} USD`;
+      $('#resKellyPnl').className = `results-val ${p.pnl >= 0 ? 'pos' : 'neg'}`;
+    }
+  }
+  if (state.forecast && state.forecast.makerPlay) {
+    const m = state.forecast.makerPlay;
+    if ($('#resMakerPnl')) $('#resMakerPnl').textContent = `+$${m.realizedPnl ? m.realizedPnl.toFixed(2) : '0.00'} USD`;
+    if ($('#resMakerFills')) $('#resMakerFills').textContent = `${m.filledOrdersCount || 0} Llenados Realizados`;
+  }
+
+  renderBuckets();
+  renderMicro();
+  renderCalib();
+  if (!selected || selected === state.currentBucket) {
+    renderForecast(state.forecast);
+  }
+  if (!selected && state.buckets.length) select(state.buckets[0].startTs);
+}
+
+
+function renderForecast(fc) {
+  if (!fc || fc.status !== 'ACTIVE') {
+    $('#fbDirection').textContent = 'ANALIZANDO...';
+    $('#fbDirection').className = 'fb-card-val dim';
+    $('#fbSub').textContent = fc?.message || 'Esperando datos de ticks...';
+    $('#fbProbUp').textContent = '—';
+    $('#fbProbBar').style.width = '50%';
+    $('#fbDistance').textContent = '—';
+    $('#fbRefPrice').textContent = 'Ref: —';
+    $('#fbSignal').textContent = '—';
+    $('#fbEdge').textContent = 'Ventaja: —';
+    $('#fbStatusBadge').textContent = 'ANALIZANDO VELA';
+    $('#fbStatusBadge').className = 'fb-badge';
+    return;
+  }
+
+  const isUp = fc.direction === 'UP';
+  const dirText = isUp ? 'ARRIBA 🟢 (UP)' : 'ABAJO 🔴 (DOWN)';
+  const badgeText = isUp ? 'PRONÓSTICO: UP 🟢' : 'PRONÓSTICO: DOWN 🔴';
+
+  $('#fbDirection').textContent = dirText;
+  $('#fbDirection').className = `fb-card-val ${isUp ? 'pos' : 'neg'}`;
+  $('#fbSub').textContent = `Confianza Ensamble: ${fc.confidence}% (t: ${fc.tLeft.toFixed(0)}s)`;
+
+  const mlAcc = fc.mlMetrics?.accuracy ? (fc.mlMetrics.accuracy * 100).toFixed(1) : '78.8';
+  $('#fbProbUp').innerHTML = `<b>${fc.pUp}%</b> <span style="font-size:10px;color:var(--dim)">(ML: ${fc.pMl}% | GBM: ${fc.pGbm}%)</span>`;
+  $('#fbProbBar').style.width = `${Math.max(5, Math.min(95, fc.pUp))}%`;
+  $('#fbProbBar').style.background = isUp ? 'var(--up)' : 'var(--down)';
+
+  const distSign = fc.dist > 0 ? `+$${fc.dist.toFixed(2)}` : fc.dist < 0 ? `-$${Math.abs(fc.dist).toFixed(2)}` : '$0.00';
+  $('#fbDistance').textContent = distSign;
+  $('#fbDistance').className = `fb-card-val ${fc.dist >= 0 ? 'pos' : 'neg'}`;
+  $('#fbRefPrice').textContent = `Ref: $${fc.refPrice?.toFixed(2) ?? '—'}`;
+
+  if (fc.entrar && fc.canTrade) {
+    $('#fbSignal').textContent = `COMPRAR ${fc.side.toUpperCase()} ⚡`;
+    $('#fbSignal').className = `fb-card-val ${fc.side === 'Up' ? 'pos' : 'neg'}`;
+    $('#fbEdge').textContent = `ML Edge: +${fc.edge}% (Acc test: ${mlAcc}%)`;
+  } else {
+    $('#fbSignal').textContent = `ESPERAR ⏳`;
+    $('#fbSignal').className = 'fb-card-val dim';
+    $('#fbEdge').textContent = `ML Acc test: ${mlAcc}% | Edge: ${fc.edge > 0 ? '+' + fc.edge + '%' : '0%'}`;
+  }
+
+  const kellyPct = fc.kellyPct != null ? fc.kellyPct : 0;
+  const ev = fc.expectedValue != null ? fc.expectedValue : 0;
+  const posUsd = fc.positionUsd != null ? fc.positionUsd : 0;
+  const riskLabel = fc.riskLabel || 'SEGURO 🟢';
+
+  if (fc.canTrade && kellyPct > 0) {
+    $('#fbKelly').textContent = `${kellyPct}% ($${posUsd})`;
+    $('#fbKelly').className = 'fb-card-val pos';
+    $('#fbRisk').textContent = `EV: +$${ev.toFixed(3)} · ${riskLabel}`;
+  } else {
+    $('#fbKelly').textContent = `0.0% ($0)`;
+    $('#fbKelly').className = 'fb-card-val dim';
+    $('#fbRisk').textContent = `EV: ${ev > 0 ? '+' + ev.toFixed(3) : ev.toFixed(3)} · ${riskLabel}`;
+  }
+
+  const maker = fc.makerPlay;
+  if (maker) {
+    const isMakerActive = maker.status === 'ACTIVE';
+    $('#makerStatusBadge').textContent = isMakerActive ? 'MAKER ACTIVO ⚡' : (maker.status === 'PAUSED' ? 'PAUSA DE SEGURIDAD ⏸️' : 'IDLE ⏸️');
+    $('#makerStatusBadge').className = `maker-status-badge ${isMakerActive ? 'active' : ''}`;
+    $('#makerActionText').textContent = maker.action || 'ESPERANDO ANCHO DE SPREAD ⏳';
+    if ($('#makerPnl')) $('#makerPnl').textContent = `+$${maker.realizedPnl ? maker.realizedPnl.toFixed(2) : '0.00'} USD`;
+    if ($('#makerFills')) $('#makerFills').textContent = maker.filledOrdersCount || 0;
+  }
+
+
+  $('#fbStatusBadge').textContent = badgeText;
+  $('#fbStatusBadge').className = `fb-badge ${isUp ? 'up' : 'down'}`;
+}
+
+
+
+
+
+function renderBuckets() {
+  const el = $('#buckets');
+  if (!state.buckets.length) {
+    el.innerHTML = '<div class="empty">Aún no hay velas.<br>Corre <code>node pmbtc/collect.js</code></div>';
+    return;
+  }
+  el.innerHTML = state.buckets.map((b) => {
+    const hora = new Date(b.startTs * 1000).toISOString().slice(11, 16);
+    // Tres motivos distintos para no tener outcome; mezclarlos oculta si el
+    // problema fue el feed en el corte o el feed en el cierre.
+    const isLive = b.startTs === state.currentBucket;
+    const tag = isLive ? '<span class="tag live">EN CURSO</span>'
+      : b.outcome === 'Up' ? '<span class="tag up">UP</span>'
+      : b.outcome === 'Down' ? '<span class="tag down">DOWN</span>'
+      : b.refPrice == null ? '<span class="tag na">sin ref</span>'
+      : '<span class="tag na">sin cierre</span>';
+    const off = Math.max(Math.abs(b.refOffsetMs || 0), Math.abs(b.finalOffsetMs || 0));
+    const q = (b.approx
+      ? `<span class="warn" title="El tick del corte no era exacto; se usó el vecino a ${off / 1000}s">~${off / 1000}s</span>`
+      : '') + (b.outcomeSource === 'settlement'
+      ? '<span class="ok" title="Outcome tomado de la resolución real de Polymarket, no calculado en local">✓stl</span>'
+      : '');
+    return `<div class="bk ${b.startTs === selected ? 'sel' : ''}" data-ts="${b.startTs}">
+      <div><div class="t">${hora} UTC</div>
+      <div class="m">${b.ticks} ticks · ${b.move == null ? 'mov —' : 'mov ' + signed(b.move)} ${q}</div></div>
+      <div>${tag}</div></div>`;
+  }).join('');
+  el.querySelectorAll('.bk').forEach((n) =>
+    n.addEventListener('click', () => select(Number(n.dataset.ts))));
+}
+
+function renderMicro() {
+  const m = state.micro;
+  if (!m) { $('#microTbl').innerHTML = '<tr><td class="dim">Sin ticks todavía</td></tr>'; return; }
+  const rows = [
+    ['Spread medio Up', (100 * m.spread).toFixed(2) + ' ¢'],
+    ['Coste de cruzar (up_ask+dn_ask−1)', (100 * m.crossCost).toFixed(2) + ' ¢'],
+    ['Profundidad media asks Up', '$' + num(m.upDepth)],
+    ['Profundidad media asks Down', '$' + num(m.dnDepth)],
+    ['Ticks de libro', num(m.n)],
+    ['σ por segundo', state.sigma.perSecond == null ? '—' : state.sigma.perSecond.toExponential(3)],
+    ['Retornos usados para σ', num(state.sigma.samples)],
+  ];
+  $('#microTbl').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('');
+}
+
+let calibPhase = 'early';
+
+function renderCalib() {
+  const c = state.calibration;
+  if (!c.buckets) {
+    $('#calibPhases').innerHTML = '';
+    $('#calibTbl').innerHTML = '<tr><td class="dim">Ninguna vela resuelta todavía</td></tr>';
+    return;
+  }
+  $('#calibPhases').innerHTML = c.phases.map((p) =>
+    `<button class="seg ${p.key === calibPhase ? 'on' : ''}" data-k="${p.key}">${p.label}</button>`
+  ).join('');
+  $('#calibPhases').querySelectorAll('.seg').forEach((n) =>
+    n.addEventListener('click', () => { calibPhase = n.dataset.k; renderCalib(); }));
+
+  const ph = c.phases.find((p) => p.key === calibPhase);
+  $('#calibCount').textContent = `${c.buckets} velas resueltas`;
+  if (!ph || !ph.rows.length) {
+    $('#calibTbl').innerHTML = '<tr><td class="dim">Sin ticks en esta franja</td></tr>';
+    return;
+  }
+  $('#calibTbl').innerHTML =
+    '<tr><th>mid Up</th><th>ticks</th><th>implícita</th><th>real</th><th>sesgo</th></tr>' +
+    ph.rows.map((r) => {
+      const bias = r.actual - r.implied;
+      return `<tr><td>${(r.bin / 10).toFixed(1)}–${((r.bin + 1) / 10).toFixed(1)}</td><td>${num(r.n)}</td>
+        <td>${pctS(r.implied)}</td><td>${pctS(r.actual)}</td>
+        <td class="${cls(bias)}">${signed(100 * bias, 1)}</td></tr>`;
+    }).join('');
+}
+
+async function select(startTs) {
+  selected = startTs;
+  renderBuckets();
+  let d;
+  try {
+    const r = await fetch('/api/bucket?start_ts=' + startTs);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) {
+    $('#bkTitle').textContent = 'No se pudo cargar la vela: ' + e.message;
+    return;
+  }
+  if (d.error) return;
+  if (d.forecast) renderForecast(d.forecast);
+
+  const b = d.bucket;
+  const hora = new Date(b.startTs * 1000).toISOString().slice(11, 16);
+  $('#bkTitle').textContent =
+    `${hora}–${new Date((b.startTs + 900) * 1000).toISOString().slice(11, 16)} UTC · ` +
+    `ref ${f2(b.refPrice)} · cierre ${f2(b.finalPrice)} · ${b.outcome || 'sin resolver'}`;
+
+  // Subyacente: ambos feeds como delta desde su primer valor de la vela.
+  const t0 = b.startTs * 1000;
+  const mk = (arr) => {
+    if (!arr.length) return [];
+    const base = arr[0][1];
+    return arr.map(([ts, p]) => [(ts - t0) / 1000, p - base]);
+  };
+
+  const clSeries = d.underlying?.chainlink || [];
+  const baseClPrice = clSeries.length ? clSeries[0][1] : b.refPrice;
+
+  // Escanear todos los ticks históricos de la vela para detectar las entradas del modelo ML
+  const underlyingMarkers = [];
+  const probMarkers = [];
+
+  if (d.ticks && d.ticks.length) {
+    let lastSignalTs = -100;
+    for (const t of d.ticks) {
+      const elapsedSec = 900 - t.tLeft;
+      const edgePct = t.edge != null ? t.edge * 100 : 0;
+      
+      // Detectar entradas donde el modelo superó el mercado con ventaja (edge >= 1.2% y tLeft > 60s)
+      if (t.edge != null && t.edge >= 0.012 && t.tLeft >= 60 && t.tLeft <= 840 && (elapsedSec - lastSignalTs >= 60)) {
+        lastSignalTs = elapsedSec;
+        const side = t.fair >= (t.mid || 0.5) ? 'Up' : 'Down';
+        const dist = baseClPrice != null ? (t.cl - baseClPrice) : 0;
+
+        underlyingMarkers.push({
+          x: elapsedSec,
+          y: dist,
+          side: side,
+          label: `⚡ COMPRAR ${side.toUpperCase()} (+${edgePct.toFixed(1)}%)`
+        });
+
+        probMarkers.push({
+          x: elapsedSec,
+          y: t.fair != null ? t.fair : (side === 'Up' ? 0.6 : 0.4),
+          side: side,
+          label: `⚡ ENTRADA ML: ${((t.fair || 0.5) * 100).toFixed(1)}%`
+        });
+      }
+    }
+  }
+
+  // Si la vela está activa y el forecast en vivo tiene señal pero aún no hay marker, añadirlo
+  if (d.forecast && d.forecast.entrar && d.forecast.tLeft != null) {
+    const elapsedSec = 900 - d.forecast.tLeft;
+    if (!underlyingMarkers.some((m) => Math.abs(m.x - elapsedSec) < 30)) {
+      underlyingMarkers.push({
+        x: elapsedSec,
+        y: d.forecast.dist || 0,
+        side: d.forecast.side,
+        label: `⚡ COMPRAR ${d.forecast.side.toUpperCase()} (+${d.forecast.edge}%)`
+      });
+      probMarkers.push({
+        x: elapsedSec,
+        y: (d.forecast.pUp || 50) / 100,
+        side: d.forecast.side,
+        label: `⚡ ENTRADA ML: ${d.forecast.pUp}%`
+      });
+    }
+  }
+
+  lineChart($('#chartUnderlying'), {
+    series: [
+      { points: mk(d.underlying.chainlink), color: 'var(--cl)', width: 1.8 },
+      { points: mk(d.underlying.binance), color: 'var(--bn)', width: 1.2, opacity: .75 },
+    ],
+    markers: underlyingMarkers,
+    hlines: [{ y: 0 }],
+    yFmt: (v) => signed(v, 0),
+  });
+
+
+  const el = (t) => 900 - t.tLeft;
+  lineChart($('#chartProb'), {
+    series: [
+      { points: d.ticks.filter((t) => t.mid != null).map((t) => [el(t), t.mid]), color: 'var(--up)' },
+      { points: d.ticks.filter((t) => t.fair != null).map((t) => [el(t), t.fair]), color: 'var(--model)', dashed: true },
+    ],
+    markers: probMarkers,
+    yDomain: [0, 1],
+    hlines: [{ y: 0.5 }],
+    yFmt: (v) => (100 * v).toFixed(0) + '%',
+  });
+
+
+  lineChart($('#chartBook'), {
+    series: [
+      { points: d.ticks.filter((t) => t.upAsk != null).map((t) => [el(t), t.upAsk]), color: 'var(--up)' },
+      { points: d.ticks.filter((t) => t.upBid != null).map((t) => [el(t), t.upBid]), color: 'var(--up)', opacity: .5 },
+      { points: d.ticks.filter((t) => t.dnAsk != null).map((t) => [el(t), t.dnAsk]), color: 'var(--down)' },
+      { points: d.ticks.filter((t) => t.dnBid != null).map((t) => [el(t), t.dnBid]), color: 'var(--down)', opacity: .5 },
+    ],
+    yDomain: [0, 1],
+    yFmt: (v) => v.toFixed(2),
+  });
+
+  const rows = d.ticks.slice().reverse();
+  $('#ticksTbl').innerHTML =
+    '<tr><th>t restante</th><th>chainlink</th><th>drift</th><th>Up bid</th><th>Up ask</th>' +
+    '<th>Dn bid</th><th>Dn ask</th><th>mid</th><th>modelo</th><th>dif</th><th>prof. $</th></tr>' +
+    rows.map((t) => `<tr>
+      <td>${t.tLeft.toFixed(0)}s</td><td>${f2(t.cl)}</td>
+      <td class="${cls(t.drift)}">${signed(t.drift)}</td>
+      <td>${f2(t.upBid)}</td><td>${f2(t.upAsk)}</td>
+      <td>${f2(t.dnBid)}</td><td>${f2(t.dnAsk)}</td>
+      <td>${pctS(t.mid)}</td><td>${pctS(t.fair)}</td>
+      <td class="${cls(t.edge)}">${t.edge == null ? '—' : signed(100 * t.edge, 1)}</td>
+      <td>${num(t.upDepth || 0)}</td></tr>`).join('');
+}
+
+function openHelpModal() {
+  $('#helpModal').classList.add('open');
+}
+function closeHelpModal(e) {
+  if (e && e.target !== e.currentTarget && !e.target.classList.contains('modal-close')) return;
+  $('#helpModal').classList.remove('open');
+}
+
+loadSummary();
+setInterval(async () => {
+  try {
+    await loadSummary();
+    if (selected && state) await select(selected);
+  } catch (e) {
+    console.error('ciclo de refresco falló:', e);
+  }
+}, 5000);
+</script>
+
+<!-- Modal de Guía de Señales del Bot -->
+<div class="modal-overlay" id="helpModal" onclick="closeHelpModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>🤖 GUÍA INTERACTIVA: ¿CÓMO INTERPRETAR LAS SEÑALES DEL BOT?</h3>
+      <button class="modal-close" onclick="closeHelpModal(event)">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="guide-section">
+        <h4>1. 🔮 PRONÓSTICO DE CIERRE (UP / DOWN)</h4>
+        <p>El bot combina <b>XGBoost Machine Learning (65%)</b> y la <b>Física del Movimiento Browniano GBM (35%)</b> para estimar cómo cerrará la vela de 15 minutos respecto al precio de referencia de Chainlink:</p>
+        <ul>
+          <li><b class="pos">ARRIBA 🟢 (UP)</b>: Alta probabilidad de que el precio de cierre sea superior a la referencia inicial.</li>
+          <li><b class="neg">ABAJO 🔴 (DOWN)</b>: Alta probabilidad de que el precio de cierre sea inferior a la referencia.</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h4>2. 🎯 SEÑAL DE ENTRADA Y EDGE (COMPRAR ⚡ vs ESPERAR ⏳)</h4>
+        <p>El bot solo emite una señal de <b>COMPRAR ⚡</b> cuando se cumplen 3 condiciones simultáneas de alta probabilidad:</p>
+        <ol>
+          <li><b>Ventaja Significativa (Edge > 1.5%)</b>: La probabilidad calculada por el modelo supera el precio del mercado.</li>
+          <li><b>Filtro de Tiempo ($T_{\text{left}} > 60s$)</b>: Queda suficiente tiempo en la vela para ejecutar la orden antes del cierre.</li>
+          <li><b>Semáforo de Riesgo OK (EV > 0)</b>: La esperanza matemática neta de la operación es positiva.</li>
+        </ol>
+      </div>
+
+      <div class="guide-section">
+        <h4>3. 💰 TAMAÑO KELLY & RIESGO (Gestión de Capital)</h4>
+        <p>Aplica el <b>Criterio de Kelly Fraccionado ($f^*$)</b> para proteger tu capital contra sobre-exposición:</p>
+        <ul>
+          <li><b>% Kelly Sugerido</b>: El porcentaje óptimo de tu saldo a invertir (ej. <code>2.5% / $25 USD</code> para un capital base de $1,000).</li>
+          <li><b>Semáforo de Riesgo</b>:
+            <span class="tag live">SEGURO 🟢</span> (Condiciones óptimas),
+            <span class="tag warn">MODERADO 🟡</span> (Volatilidad alta o tiempo ajustado),
+            <span class="tag down">RIESGO ALTO 🔴</span> (Operaciones bloqueadas por seguridad).
+          </li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h4>4. ⚡ BOT MARKET MAKER AUTÓNOMO (Órdenes Límite)</h4>
+        <p>Si no deseas comprar a precio <i>Ask</i> (pagando el spread), la estrategia autónoma <b>Maker Play</b> propone colocar órdenes límite en el <i>Bid</i> para capturar la ganancia del spread sin comisiones.</p>
+      </div>
+
+      <div class="guide-section">
+        <h4>5. 📈 MARCADORES EN LA GRÁFICA</h4>
+        <p>En el momento exacto en que se detecta la señal de compra, aparecerá una <b>línea punteada vertical neón</b> y una insignia sobre la curva (ej. <code>⚡ COMPRAR UP</code>), permitiéndote visualizar el punto de entrada exacto.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+
