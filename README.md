@@ -209,6 +209,14 @@ Reglas adicionales, fijadas antes de ver resultados:
 - **AUC por franja de $t_{\text{left}}$**: 0.528 (750–900s, ≈azar) → 0.612 (450–750s) → 0.745 (150–450s) → 0.941 (0–150s, resolución casi determinista).
 - **Barrido de umbral con Bonferroni ($k=10$)**: todos los umbrales evaluados (0.1c a 3.0c) cruzan el punto de equilibrio al 99.5% de confianza → **la estrategia direccional no ofrece ventaja estadísticamente distinguible del azar**.
 
+![Figura 2: Curva ROC a nivel de vela y decaimiento del AUC por t_left](./plots/fig2_calibration_roc.png)
+*Figura 2 — Calibración y curva ROC a nivel de vela ($N=407$), con el desglose del AUC por franja de $t_{\text{left}}$ descrito arriba. Nótese cómo el poder predictivo real (fase media, 450–750s) es sustancialmente menor que el AUC agregado ingenuo, precisamente el efecto de fuga de información que la metodología busca aislar.*
+
+### Desempeño por franja horaria
+
+![Figura 3: Mapa de calor de desempeño por hora del día](./plots/fig3_hourly_heatmap.png)
+*Figura 3 — Resultado de `hourly_analysis.js` / `hourly_maker_analysis.js`: desglose del winrate y del EV por franja horaria (UTC). Útil para detectar si el edge (o su ausencia) se concentra en horarios de mayor liquidez, y como advertencia frente a sobreajustar la estrategia a una franja horaria concreta con pocas velas por celda.*
+
 ### Market Maker
 
 | Métrica | Bruto | Neto (fricción 18%) | IC 95% Bootstrap |
@@ -217,6 +225,12 @@ Reglas adicionales, fijadas antes de ver resultados:
 | Fills ejecutados | 20,700 | 20,700 | — |
 
 El modelo de fricción del 18% se desglosa en: 8% latencia del *relayer* de Polygon (~120ms), 7% *slippage* (descuento de \$0.005/contrato), 3% *gas fees* por rebalanceo en lote. **Léase junto con la nota de la sección anterior sobre `simulateOrderFills()`**: este PnL proviene de una tasa de llenado sintética, no de un replay contra el libro de órdenes histórico.
+
+![Figura 1: Curva de equity del Market Maker](./plots/fig1_equity_curve.png)
+*Figura 1 — Curva de equity acumulada (PnL neto) del bot de Market Making a lo largo del periodo evaluado. La pendiente relativamente estable es consistente con una estrategia de captura de spread de baja varianza por operación, pero recuérdese que la tasa de fills subyacente es sintética (25%/25% vía `Math.random()`), no un replay del libro real.*
+
+![Figura 4: Control dinámico de inventario (inventory skew)](./plots/fig4_inventory_skew.png)
+*Figura 4 — Evolución del inventario neto (`inventoryCount`) y del skew aplicado a las cotizaciones a lo largo del tiempo. Muestra cómo el mecanismo de `clamp(-0.04, 0.04, inventario/50 × 0.05)` empuja el precio cotizado para reconducir el inventario hacia cero tras acumular posición en un solo lado.*
 
 ---
 
