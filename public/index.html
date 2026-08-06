@@ -208,20 +208,37 @@
     transition: width 0.3s ease;
   }
 
-  /* ── 3-Charts Single Screen Layout ─────────────────────── */
-  .charts-grid-3 {
+  /* ── Layout de Gráficas Completas y Panorámicas ─────────────── */
+  .charts-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 14px;
+  }
+  .chart-panel-full {
+    background: #060b14;
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.08);
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+  }
+  .chart-panel-full:hover {
+    border-color: rgba(0, 243, 255, 0.55);
+  }
+  .charts-grid-sub {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
   }
-  @media (max-width: 1250px) {
-    .charts-grid-3 { grid-template-columns: 1fr; }
+  @media (max-width: 1100px) {
+    .charts-grid-sub { grid-template-columns: 1fr; }
   }
-  .compact-chart {
-    height: 190px;
-    padding: 6px 10px;
+  .full-chart {
+    height: 275px;
+    padding: 10px 14px 12px 14px;
   }
-  .compact-chart svg {
+  .full-chart svg {
     height: 100%;
     width: 100%;
   }
@@ -692,33 +709,43 @@
       <button id="btnAutoLive" class="seg on" onclick="toggleAutoLive()" style="margin-left:auto;font-weight:700">🔴 MODO EN VIVO ⚡</button>
     </div>
 
-    <!-- Grid de 3 Gráficas Lado a Lado (En una sola pantalla) -->
-    <div class="charts-grid-3">
-      <div class="panel">
-        <h2>1. Subyacente Δ (BTC)</h2>
-        <div class="legend">
-          <span><i style="background:var(--cl)"></i>chainlink Δ</span>
-          <span><i style="background:var(--bn)"></i>binance Δ</span>
+    <!-- Contenedor Panorámico de las 3 Gráficas Completas -->
+    <div class="charts-wrapper">
+      <!-- 1. Gráfica Principal Subyacente (Fila Superior 100% Ancho) -->
+      <div class="chart-panel-full">
+        <div style="padding:10px 16px;background:#08101d;border-bottom:1px solid rgba(0,243,255,0.2);display:flex;align-items:center;justify-content:space-between">
+          <h2 style="margin:0;font-size:13px;color:var(--cl);font-weight:700;font-family:var(--mono)">1. Subyacente Δ Bitcoin (Chainlink vs. Binance en Tiempo Real)</h2>
+          <div class="legend" style="margin:0">
+            <span><i style="background:var(--cl)"></i>chainlink Δ</span>
+            <span><i style="background:var(--bn)"></i>binance Δ</span>
+          </div>
         </div>
-        <div id="chartUnderlying" class="compact-chart"></div>
+        <div id="chartUnderlying" class="full-chart"></div>
       </div>
 
-      <div class="panel">
-        <h2>2. Probabilidad de Up</h2>
-        <div class="legend">
-          <span><i style="background:var(--up)"></i>mercado</span>
-          <span><i style="background:var(--model)"></i>modelo</span>
+      <!-- 2 y 3. Gráficas Secundarias (Fila Inferior 50% / 50%) -->
+      <div class="charts-grid-sub">
+        <div class="chart-panel-full">
+          <div style="padding:10px 16px;background:#08101d;border-bottom:1px solid rgba(0,243,255,0.2);display:flex;align-items:center;justify-content:space-between">
+            <h2 style="margin:0;font-size:13px;color:var(--up);font-weight:700;font-family:var(--mono)">2. Probabilidad de Up (Mercado vs. Modelo ML)</h2>
+            <div class="legend" style="margin:0">
+              <span><i style="background:var(--up)"></i>mercado</span>
+              <span><i style="background:var(--model)"></i>modelo</span>
+            </div>
+          </div>
+          <div id="chartProb" class="full-chart"></div>
         </div>
-        <div id="chartProb" class="compact-chart"></div>
-      </div>
 
-      <div class="panel">
-        <h2>3. Libro de Órdenes</h2>
-        <div class="legend">
-          <span><i style="background:var(--up)"></i>Up bid/ask</span>
-          <span><i style="background:var(--down)"></i>Down bid/ask</span>
+        <div class="chart-panel-full">
+          <div style="padding:10px 16px;background:#08101d;border-bottom:1px solid rgba(0,243,255,0.2);display:flex;align-items:center;justify-content:space-between">
+            <h2 style="margin:0;font-size:13px;color:var(--down);font-weight:700;font-family:var(--mono)">3. Libro de Órdenes (Bids y Asks en Vivo)</h2>
+            <div class="legend" style="margin:0">
+              <span><i style="background:var(--up)"></i>Up bid/ask</span>
+              <span><i style="background:var(--down)"></i>Down bid/ask</span>
+            </div>
+          </div>
+          <div id="chartBook" class="full-chart"></div>
         </div>
-        <div id="chartBook" class="compact-chart"></div>
       </div>
     </div>
 
@@ -751,7 +778,7 @@
 
 <script>
 const $ = (s) => document.querySelector(s);
-const W = 900, H = 240, PAD = { l: 56, r: 16, t: 14, b: 24 };
+const W = 960, H = 270, PAD = { l: 60, r: 24, t: 24, b: 26 };
 
 const f2 = (x) => x == null ? '—' : x.toFixed(2);
 const num = (x) => x == null ? '—' : Math.round(x).toLocaleString('es-MX');
