@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+*.db
+*.db-shm
+*.db-wal
+data/
+*.log
+supervise.log*
+collect.log
+.env
+.env.local
+.git
+.gitignore
+.DS_Store
+*.aux
+*.out

@@ -1,0 +1,21 @@
+{
+  "name": "pmbtc-quant",
+  "version": "1.0.0",
+  "description": "Marco cuantitativo de predicción y market making autónomo para BTC en Polymarket",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "collect": "node collect.js",
+    "backtest": "node backtest.js",
+    "backtest:full": "node run_full_rigorous_backtest.js",
+    "supervise": "node supervise.js",
+    "smoke": "node smoke.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0"
+  }
+}

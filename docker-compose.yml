@@ -1,0 +1,29 @@
+services:
+  # Colector: se conecta a Binance/Chainlink y va llenando pmbtc.db.
+  # Debe correr siempre para que el dashboard tenga datos frescos.
+  collector:
+    build: .
+    command: ["node", "collect.js"]
+    environment:
+      - PMBTC_DB=/data/pmbtc.db
+    volumes:
+      - pmbtc_data:/data
+    restart: unless-stopped
+
+  # Servidor: dashboard de solo lectura sobre la misma base de datos.
+  server:
+    build: .
+    command: ["node", "server.js"]
+    environment:
+      - PMBTC_DB=/data/pmbtc.db
+      - PMBTC_PORT=8787
+    ports:
+      - "8787:8787"
+    volumes:
+      - pmbtc_data:/data
+    depends_on:
+      - collector
+    restart: unless-stopped
+
+volumes:
+  pmbtc_data:
