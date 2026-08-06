@@ -1150,16 +1150,19 @@ async function select(startTs, userManualClick = false) {
 
   const underlyingMarkers = [];
   const probMarkers = [];
+  const bookMarkers = [];
 
   if (d.ticks && d.ticks.length) {
-    let lastSignalTs = -100;
+    let lastSignalTs = -120;
     for (const t of d.ticks) {
       const elapsedSec = 900 - t.tLeft;
-      const edgePct = t.edge != null ? t.edge * 100 : 0;
-      if (t.edge != null && t.edge >= 0.012 && t.tLeft >= 60 && t.tLeft <= 840 && (elapsedSec - lastSignalTs >= 60)) {
+      const edgePct = t.edge != null ? Math.abs(t.edge * 100) : 0;
+      // Mostrar marcadores cuando haya una ventaja (edge >= 0.3%) y separación de al menos 45s
+      if (t.edge != null && Math.abs(t.edge) >= 0.003 && t.tLeft >= 30 && t.tLeft <= 870 && (elapsedSec - lastSignalTs >= 45)) {
         lastSignalTs = elapsedSec;
         const side = t.fair >= (t.mid || 0.5) ? 'Up' : 'Down';
         const dist = baseClPrice != null ? (t.cl - baseClPrice) : 0;
+        const entryPrice = side === 'Up' ? (t.upAsk || t.mid || 0.5) : (t.dnAsk || (1 - (t.mid || 0.5)));
 
         underlyingMarkers.push({
           x: elapsedSec,
@@ -1172,9 +1175,42 @@ async function select(startTs, userManualClick = false) {
           x: elapsedSec,
           y: t.fair != null ? t.fair : (side === 'Up' ? 0.6 : 0.4),
           side: side,
-          label: `⚡ ENTRADA ML: ${((t.fair || 0.5) * 100).toFixed(1)}%`
+          label: `⚡ SEÑAL ML: ${((t.fair || 0.5) * 100).toFixed(1)}%`
+        });
+
+        bookMarkers.push({
+          x: elapsedSec,
+          y: entryPrice,
+          side: side,
+          label: `⚡ ${side.toUpperCase()} @ $${entryPrice.toFixed(2)}`
         });
       }
+    }
+  }
+
+  // Si la vela está activa y el pronóstico en vivo detecta entrada, añadir marcador dinámico
+  if (d.forecast && d.forecast.entrar && d.forecast.tLeft != null) {
+    const elapsedSec = 900 - d.forecast.tLeft;
+    if (!underlyingMarkers.some((m) => Math.abs(m.x - elapsedSec) < 30)) {
+      const side = d.forecast.side || 'Up';
+      underlyingMarkers.push({
+        x: elapsedSec,
+        y: d.forecast.dist || 0,
+        side: side,
+        label: `⚡ COMPRAR ${side.toUpperCase()} (+${d.forecast.edge}%)`
+      });
+      probMarkers.push({
+        x: elapsedSec,
+        y: (d.forecast.pUp || 50) / 100,
+        side: side,
+        label: `⚡ SEÑAL EN VIVO: ${d.forecast.pUp}%`
+      });
+      bookMarkers.push({
+        x: elapsedSec,
+        y: (d.forecast.price || 0.5),
+        side: side,
+        label: `⚡ COMPRA EN VIVO ${side.toUpperCase()}`
+      });
     }
   }
 
@@ -1207,6 +1243,7 @@ async function select(startTs, userManualClick = false) {
       { points: (d.ticks || []).filter((t) => t.dnAsk != null).map((t) => [elSec(t), t.dnAsk]), color: 'var(--down)' },
       { points: (d.ticks || []).filter((t) => t.dnBid != null).map((t) => [elSec(t), t.dnBid]), color: 'var(--down)', opacity: .5 },
     ],
+    markers: bookMarkers,
     yDomain: [0, 1],
     yFmt: (v) => v.toFixed(2),
   });
