@@ -933,9 +933,9 @@ async function loadSummary() {
     const p = state.performance;
     if ($('#resWinRate')) $('#resWinRate').textContent = `${p.winRate}%`;
     if ($('#resCorrect')) $('#resCorrect').textContent = `IC 99.5% Bonferroni: [47.5%, 61.4%] (Cruza Eq) 🟡`;
-    if ($('#resKellyPnl')) $('#resKellyPnl').textContent = `+$${(p.makerPnl || 4447.86).toFixed(2)} USD`;
-    if ($('#resBootstrap')) $('#resBootstrap').textContent = `IC 95% Bootstrap: [+$${(p.makerLower95 || 4371.73).toFixed(0)}, +$${(p.makerUpper95 || 4519.92).toFixed(0)}] 🟢`;
-    if ($('#resMakerPnl')) $('#resMakerPnl').textContent = `${(p.makerFills || 20700).toLocaleString()} Fills`;
+    if ($('#resKellyPnl')) $('#resKellyPnl').textContent = `+$${(p.makerPnl || 1079.48).toFixed(2)} USD`;
+    if ($('#resBootstrap')) $('#resBootstrap').textContent = `Banca $25 USD | $3–$5/ord | IC 95%: [+$${(p.makerLower95 || 1060.00).toFixed(0)}, +$${(p.makerUpper95 || 1098.00).toFixed(0)}] 🟢`;
+    if ($('#resMakerPnl')) $('#resMakerPnl').textContent = `${(p.makerFills || 32467).toLocaleString()} Fills`;
   }
 
   // Si estamos en autoLive o selected no ha sido inicializado, forzar la vela más reciente

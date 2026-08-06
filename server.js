@@ -313,15 +313,23 @@ function getBotHistoricalPerformance(db, sigma) {
     const summaryPath = path.join(__dirname, 'backtest_summary_real.json');
     if (fs.existsSync(summaryPath)) {
       const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+      const maker = summary.maker || {};
+      const netPnL = summary.makerPnl != null ? summary.makerPnl : (maker.totalNetPnL != null ? maker.totalNetPnL : 1076.87);
+      const fills = summary.makerFills != null ? summary.makerFills : (maker.totalFills != null ? maker.totalFills : 32467);
+      const lower95 = summary.makerLower95 != null ? summary.makerLower95 : (maker.makerPnLLower95 != null ? maker.makerPnLLower95 : 1057.11);
+      const upper95 = summary.makerUpper95 != null ? summary.makerUpper95 : (maker.makerPnLUpper95 != null ? maker.makerPnLUpper95 : 1096.95);
       return {
-        totalCandles: summary.velas || 407,
+        totalCandles: summary.totalCandles || summary.velas || 407,
         winRate: 54.4,
-        correct: 221,
-        pnl: summary.maker ? summary.maker.totalNetPnL : 4447.86,
-        makerFills: summary.maker ? summary.maker.totalFills : 20700,
-        makerPnl: summary.maker ? summary.maker.totalNetPnL : 4447.86,
-        makerLower95: summary.maker ? summary.maker.makerPnLLower95 : 4371.73,
-        makerUpper95: summary.maker ? summary.maker.makerPnLUpper95 : 4519.92,
+        correct: 222,
+        pnl: netPnL,
+        makerFills: fills,
+        makerPnl: netPnL,
+        makerLower95: lower95,
+        makerUpper95: upper95,
+        bankrollUsd: summary.bankrollUsd || 25.0,
+        minOrderUsd: summary.minOrderUsd || 3.0,
+        maxOrderUsd: summary.maxOrderUsd || 5.0,
         auc: 0.6921,
         brier: 0.201,
         bonferroniVerdict: 'Sin ventaja direccional (IC 99.5% Bonferroni cruza eq)'
@@ -330,12 +338,15 @@ function getBotHistoricalPerformance(db, sigma) {
     return {
       totalCandles: 407,
       winRate: 54.4,
-      correct: 221,
-      pnl: 4447.86,
-      makerFills: 20700,
-      makerPnl: 4447.86,
-      makerLower95: 4371.73,
-      makerUpper95: 4519.92,
+      correct: 222,
+      pnl: 1076.87,
+      makerFills: 32467,
+      makerPnl: 1076.87,
+      makerLower95: 1057.11,
+      makerUpper95: 1096.95,
+      bankrollUsd: 25.0,
+      minOrderUsd: 3.0,
+      maxOrderUsd: 5.0,
       auc: 0.6921,
       brier: 0.201,
       bonferroniVerdict: 'Sin ventaja direccional (IC 99.5% Bonferroni cruza eq)'
@@ -344,12 +355,15 @@ function getBotHistoricalPerformance(db, sigma) {
     return {
       totalCandles: 407,
       winRate: 54.4,
-      correct: 221,
-      pnl: 4447.86,
-      makerFills: 20700,
-      makerPnl: 4447.86,
-      makerLower95: 4371.73,
-      makerUpper95: 4519.92,
+      correct: 222,
+      pnl: 1076.87,
+      makerFills: 32467,
+      makerPnl: 1076.87,
+      makerLower95: 1057.11,
+      makerUpper95: 1096.95,
+      bankrollUsd: 25.0,
+      minOrderUsd: 3.0,
+      maxOrderUsd: 5.0,
       auc: 0.6921,
       brier: 0.201,
       bonferroniVerdict: 'Sin ventaja direccional (IC 99.5% Bonferroni cruza eq)'

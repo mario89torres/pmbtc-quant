@@ -1,134 +1,16 @@
 {
-  "velas": 406,
-  "ticks": 179065,
-  "summaryThresholds": [
-    {
-      "edge": "0.1c",
-      "ops": 405,
-      "aciertos": 220,
-      "winRate": 0.5432098765432098,
-      "eq": 0.5107901234567901,
-      "lo95": 0.49469546799553504,
-      "hi95": 0.5917242850908846,
-      "loBonf": 0.47373031287314704,
-      "hiBonf": 0.6126894402132727,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "0.3c",
-      "ops": 402,
-      "aciertos": 203,
-      "winRate": 0.5049751243781094,
-      "eq": 0.5088781094527365,
-      "lo95": 0.45609958660970173,
-      "hi95": 0.5538506621465171,
-      "loBonf": 0.4349783720740684,
-      "hiBonf": 0.5749718766821504,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "0.5c",
-      "ops": 396,
-      "aciertos": 200,
-      "winRate": 0.5050505050505051,
-      "eq": 0.5044318181818183,
-      "lo95": 0.4558061645050678,
-      "hi95": 0.5542948455959423,
-      "loBonf": 0.4345255744836467,
-      "hiBonf": 0.5755754356173635,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "0.8c",
-      "ops": 373,
-      "aciertos": 191,
-      "winRate": 0.5120643431635389,
-      "eq": 0.5052975871313676,
-      "lo95": 0.46133663972247513,
-      "hi95": 0.5627920466046026,
-      "loBonf": 0.4394150250211583,
-      "hiBonf": 0.5847136613059195,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "1.0c",
-      "ops": 356,
-      "aciertos": 191,
-      "winRate": 0.5365168539325843,
-      "eq": 0.5102247191011238,
-      "lo95": 0.48471566471242084,
-      "hi95": 0.5883180431527478,
-      "loBonf": 0.4623301507994216,
-      "hiBonf": 0.610703557065747,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "1.2c",
-      "ops": 338,
-      "aciertos": 177,
-      "winRate": 0.5236686390532544,
-      "eq": 0.510144970414201,
-      "lo95": 0.47042342318098324,
-      "hi95": 0.5769138549255256,
-      "loBonf": 0.44741388346475175,
-      "hiBonf": 0.5999233946417571,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "1.5c",
-      "ops": 314,
-      "aciertos": 161,
-      "winRate": 0.5127388535031847,
-      "eq": 0.5022579617834393,
-      "lo95": 0.4574522063971759,
-      "hi95": 0.5680255006091935,
-      "loBonf": 0.4335604767549363,
-      "hiBonf": 0.5919172302514331,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "2.0c",
-      "ops": 264,
-      "aciertos": 141,
-      "winRate": 0.5340909090909091,
-      "eq": 0.507356060606061,
-      "lo95": 0.47391643641949927,
-      "hi95": 0.5942653817623189,
-      "loBonf": 0.44791246787221145,
-      "hiBonf": 0.6202693503096066,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "3.0c",
-      "ops": 169,
-      "aciertos": 98,
-      "winRate": 0.5798816568047337,
-      "eq": 0.4984497041420119,
-      "lo95": 0.5054653304739216,
-      "hi95": 0.6542979831355458,
-      "loBonf": 0.47330684659524924,
-      "hiBonf": 0.6864564670142181,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    },
-    {
-      "edge": "5.0c",
-      "ops": 72,
-      "aciertos": 41,
-      "winRate": 0.5694444444444444,
-      "eq": 0.5176944444444445,
-      "lo95": 0.45506970914225536,
-      "hi95": 0.6838191797466335,
-      "loBonf": 0.40564348424380936,
-      "hiBonf": 0.7332454046450795,
-      "veredictoBonf": "INDISTINGUIBLE (FALSO POSITIVO) 🟡"
-    }
-  ],
-  "maker": {
-    "totalFills": 20700,
-    "totalGrossPnL": 5424.224999999999,
-    "totalNetPnL": 4447.8645,
-    "makerPnLLower95": 4371.727500000001,
-    "makerPnLUpper95": 4519.922000000001,
-    "frictionPct": 0.18
-  }
+  "totalCandles": 411,
+  "winRate": 54.4,
+  "correct": 222,
+  "makerFills": 31374,
+  "makerGrossPnl": 1316.4376227338553,
+  "makerPnl": 1079.4788506417615,
+  "makerLower95": 1060.0021301835275,
+  "makerUpper95": 1098.6486783579278,
+  "bankrollUsd": 25,
+  "minOrderUsd": 3,
+  "maxOrderUsd": 5,
+  "auc": 0.6921,
+  "brier": 0.201,
+  "bonferroniVerdict": "Sin ventaja direccional (IC 99.5% Bonferroni cruza eq)"
 }

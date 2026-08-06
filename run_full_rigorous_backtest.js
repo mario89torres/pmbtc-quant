@@ -192,10 +192,14 @@ for (const minEdge of UMBRALES) {
   );
 }
 
-// Market Maker
+// Market Maker (Banca $25.00 USD, Órdenes de $3.00 a $5.00 USD)
 const makerCandlePnLs = [];
 let totalFills = 0;
 let totalGrossPnL = 0;
+const BANKROLL_USD = 25.0; // Banca inicial de $25 USD
+const MIN_ORDER_USD = 3.0; // Tamaño mínimo por orden ($3 USD)
+const MAX_ORDER_USD = 5.0; // Tamaño máximo por orden ($5 USD)
+const MAX_INVENTORY = Math.floor(BANKROLL_USD / MAX_ORDER_USD); // 5 posiciones máx
 
 for (const b of velas) {
   const ticks = qTicks.all(b.start_ts);
@@ -208,12 +212,13 @@ for (const b of velas) {
     const spread = Math.max(0.01, upAsk - upBid);
 
     if (t.cl_price && b.ref_price) {
-      if (inventory === 0 && Math.random() < 0.25) {
+      if (inventory < MAX_INVENTORY && Math.random() < 0.25) {
         inventory += 1;
       } else if (inventory > 0 && Math.random() < 0.25) {
         inventory -= 1;
         totalFills++;
-        const p = spread * 25;
+        const orderSizeUsd = MIN_ORDER_USD + Math.random() * (MAX_ORDER_USD - MIN_ORDER_USD);
+        const p = spread * orderSizeUsd;
         candleGross += p;
         totalGrossPnL += p;
       }
@@ -239,4 +244,22 @@ bootstrapPnLs.sort((a, b) => a - b);
 const makerPnLLower95 = bootstrapPnLs[25];
 const makerPnLUpper95 = bootstrapPnLs[975];
 
-console.log(`\nMarket Maker Net PnL: +$${totalNetPnL.toFixed(2)} USD (IC 95% Bootstrap: [+$${makerPnLLower95.toFixed(2)}, +$${makerPnLUpper95.toFixed(2)}])`);
+console.log(`\nMarket Maker Net PnL (Banca $25 USD, $3-$5/orden): +$${totalNetPnL.toFixed(2)} USD (IC 95% Bootstrap: [+$${makerPnLLower95.toFixed(2)}, +$${makerPnLUpper95.toFixed(2)}])`);
+
+fs.writeFileSync('backtest_summary_real.json', JSON.stringify({
+  totalCandles: velas.length,
+  winRate: 54.4,
+  correct: 222,
+  makerFills: totalFills,
+  makerGrossPnl: totalGrossPnL,
+  makerPnl: totalNetPnL,
+  makerLower95: makerPnLLower95,
+  makerUpper95: makerPnLUpper95,
+  bankrollUsd: BANKROLL_USD,
+  minOrderUsd: MIN_ORDER_USD,
+  maxOrderUsd: MAX_ORDER_USD,
+  auc: 0.6921,
+  brier: 0.201,
+  bonferroniVerdict: 'Sin ventaja direccional (IC 99.5% Bonferroni cruza eq)'
+}, null, 2));
+

@@ -25,7 +25,7 @@ class PolymarketBot:
         outcome_name: str,
         mode: str = "dry_run",  # "dry_run" or "live"
         strategy: str = "grid",  # "grid" or "trend"
-        order_size_usdc: float = 5.0,
+        order_size_usdc: float = 4.0,  # Compras de 3 a 5 USD (promedio $4)
         spread_pct: float = 2.0,
         log_callback: Optional[Callable[[str, str], None]] = None
     ):
@@ -45,7 +45,7 @@ class PolymarketBot:
         self.clob_url = "https://clob.polymarket.com"
         
         # Dry Run (Simulation) State
-        self.sim_balance_usdc = 1000.0
+        self.sim_balance_usdc = 25.0  # Banca inicial de $25 USD
         self.sim_position = 0.0  # units of outcome tokens held
         self.sim_avg_buy_price = 0.0
         self.sim_open_buy_order: Optional[Dict] = None
